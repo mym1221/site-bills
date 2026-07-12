@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Site Bills Ledger</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<meta name="theme-color" content="#1c2128">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1c2128; --panel:#242b33; --panel-2:#2c343d;
+    --paper:#f4efe6; --paper-line:#d8cfc0;
+    --accent:#ff7a30; --accent-dark:#e2621f;
+    --text-dark:#2b3a4a; --muted:#8a94a3; --muted-2:#5b6774;
+    --green:#3fb27f; --amber:#f0a83e; --red:#e0605a;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--ink);color:#eef1f4;font-family:'Inter',sans-serif;}
+  body{padding-bottom:32px; -webkit-tap-highlight-color:transparent;}
+  h1,h2,h3{font-family:'Oswald',sans-serif; margin:0; letter-spacing:.02em;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  #app{max-width:520px;margin:0 auto;padding:0 16px;}
+
+  header{display:flex;align-items:center;justify-content:space-between;padding:22px 0 14px;}
+  .brand{font-family:'Oswald',sans-serif;font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.06em;}
+  .brand span{color:var(--accent);}
+  #settingsBtn{background:var(--panel);border:1px solid #3a4350;color:#eef1f4;width:40px;height:40px;border-radius:10px;font-size:18px;cursor:pointer;}
+
+  .totals-card{background:var(--panel);border-radius:16px;padding:18px 20px;border:1px solid #333c47;}
+  .tab-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+  .tab-row label{font-size:11px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;}
+  select{background:var(--panel-2);color:#eef1f4;border:1px solid #3a4350;border-radius:8px;padding:6px 10px;font-family:'Inter',sans-serif;font-size:13px;max-width:150px;}
+  .total-amount{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:40px;color:var(--accent);line-height:1.1;}
+  .total-sub{color:var(--muted);font-size:13px;margin-top:4px;}
+  .pending-note{color:var(--amber);font-size:12px;margin-top:6px;}
+
+  .add-btn{width:100%;margin-top:16px;padding:16px;border:none;border-radius:14px;background:var(--accent);color:#1c1200;font-family:'Oswald',sans-serif;font-weight:600;font-size:16px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;}
+  .add-btn:active{background:var(--accent-dark);}
+
+  .section-label{margin:26px 0 10px;font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;}
+
+  .entry-list{display:flex;flex-direction:column;gap:10px;}
+  .empty{color:var(--muted-2);font-size:14px;text-align:center;padding:40px 10px;border:1px dashed #3a4350;border-radius:14px;}
+
+  .stub{background:var(--paper);color:var(--text-dark);border-radius:12px;padding:14px 16px;position:relative;display:flex;gap:12px;align-items:flex-start;
+    background-image:repeating-linear-gradient(to bottom, transparent 0 8px, var(--paper-line) 8px 9px);
+    background-size:1px 100%; background-repeat:no-repeat; background-position:right 54px top 0;}
+  .stub-sn{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;background:var(--text-dark);color:var(--paper);border-radius:6px;padding:3px 7px;flex-shrink:0;transform:rotate(-3deg);}
+  .stub-body{flex:1;min-width:0;}
+  .stub-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline;}
+  .stub-vendor{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .stub-total{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px;flex-shrink:0;}
+  .stub-meta{font-size:12px;color:#6b7684;margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;}
+  .badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+  .badge.synced{background:#e3f5ec;color:var(--green);}
+  .badge.pending{background:#fdf1de;color:#b9740b;}
+  .thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--paper-line);}
+
+  .modal{position:fixed;inset:0;background:rgba(10,12,15,.72);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
+  .modal.hidden{display:none;}
+  .sheet{background:var(--panel);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;}
+  .sheet h2{font-size:19px;margin-bottom:16px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
+  .field input, .field select{width:100%;background:var(--panel-2);border:1px solid #3a4350;color:#eef1f4;border-radius:10px;padding:12px 12px;font-size:15px;font-family:'Inter',sans-serif;}
+  .field input.mono{font-family:'IBM Plex Mono',monospace;}
+  .row2{display:flex;gap:10px;}
+  .row2 .field{flex:1;}
+
+  .photo-btn{width:100%;border:1.5px dashed #4a5563;background:var(--panel-2);color:var(--muted);border-radius:12px;padding:22px 12px;text-align:center;font-size:13px;cursor:pointer;margin-bottom:14px;}
+  .photo-preview{width:100%;border-radius:12px;margin-bottom:14px;display:none;max-height:220px;object-fit:cover;}
+
+  .computed-total{background:var(--panel-2);border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+  .computed-total span:first-child{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+  .computed-total span:last-child{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:19px;color:var(--accent);}
+
+  .btn-row{display:flex;gap:10px;margin-top:6px;}
+  .btn{flex:1;padding:14px;border-radius:12px;border:none;font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;}
+  .btn-primary{background:var(--accent);color:#1c1200;}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid #3a4350;}
+
+  .help-text{font-size:12px;color:var(--muted-2);line-height:1.5;margin-bottom:14px;}
+  .status-msg{font-size:13px;margin-top:10px;text-align:center;min-height:16px;}
+  .status-msg.ok{color:var(--green);}
+  .status-msg.err{color:var(--red);}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">SITE<span>BILLS</span></div>
+    <button id="settingsBtn">⚙</button>
+  </header>
+
+  <section class="totals-card">
+    <div class="tab-row">
+      <label for="activeTab">Ledger tab</label>
+      <select id="activeTab"></select>
+    </div>
+    <div class="total-amount mono" id="totalAmount">0.000</div>
+    <div class="total-sub"><span id="entryCount">0</span> bills in this tab</div>
+    <div class="pending-note" id="pendingNote" style="display:none;"></div>
+  </section>
+
+  <button class="add-btn" id="addBillBtn">+ Add Bill</button>
+
+  <div class="section-label">Recent entries</div>
+  <div class="entry-list" id="entryList"></div>
+</div>
+
+<!-- Add Bill Modal -->
+<div class="modal hidden" id="billModal">
+  <div class="sheet">
+    <h2>Add Bill</h2>
+    <button class="photo-btn" id="photoBtn">📷 Tap to capture bill photo (optional)</button>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none;">
+    <img id="photoPreview" class="photo-preview">
+
+    <div class="field">
+      <label for="fTab">Ledger tab</label>
+      <select id="fTab"></select>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="fDate">Date</label>
+        <input type="date" id="fDate">
+      </div>
+      <div class="field">
+        <label for="fBillNo">Bill No</label>
+        <input type="text" id="fBillNo" placeholder="optional">
+      </div>
+    </div>
+    <div class="field">
+      <label for="fVendor">Vendor</label>
+      <input type="text" id="fVendor" placeholder="e.g. ALKARRAR TRADING">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="fAmount">Amount</label>
+        <input type="number" step="0.001" inputmode="decimal" class="mono" id="fAmount" placeholder="0.000">
+      </div>
+      <div class="field">
+        <label for="fVat">VAT</label>
+        <input type="number" step="0.001" inputmode="decimal" class="mono" id="fVat" placeholder="0.000">
+      </div>
+    </div>
+    <div class="computed-total">
+      <span>Total</span>
+      <span id="computedTotal">0.000</span>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="cancelBillBtn">Cancel</button>
+      <button class="btn btn-primary" id="submitBillBtn">Save Bill</button>
+    </div>
+    <div class="status-msg" id="billStatus"></div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal hidden" id="settingsModal">
+  <div class="sheet">
+    <h2>Settings</h2>
+    <p class="help-text">Paste the Web App URL from your Google Apps Script deployment (see SETUP-GUIDE.md). This connects the app to your Google Sheet.</p>
+    <div class="field">
+      <label for="scriptUrlInput">Apps Script Web App URL</label>
+      <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="closeSettingsBtn">Close</button>
+      <button class="btn btn-primary" id="saveSettingsBtn">Save & Connect</button>
+    </div>
+    <div class="status-msg" id="settingsStatus"></div>
+    <div class="btn-row" style="margin-top:18px;">
+      <button class="btn btn-ghost" id="syncNowBtn">Sync Pending Bills</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const LS_KEYS = { url: 'sb_script_url', tabs: 'sb_tabs', entries: 'sb_entries', activeTab: 'sb_active_tab' };
+
+let scriptUrl = localStorage.getItem(LS_KEYS.url) || '';
+let tabs = JSON.parse(localStorage.getItem(LS_KEYS.tabs) || '[]');
+let entries = JSON.parse(localStorage.getItem(LS_KEYS.entries) || '[]');
+let activeTab = localStorage.getItem(LS_KEYS.activeTab) || '';
+let capturedPhoto = null; // {base64, previewUrl}
+
+const $ = (id) => document.getElementById(id);
+
+function saveEntries(){ localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries)); }
+function saveTabs(){ localStorage.setItem(LS_KEYS.tabs, JSON.stringify(tabs)); }
+
+function populateTabSelects(){
+  [$('activeTab'), $('fTab')].forEach(sel => {
+    sel.innerHTML = '';
+    tabs.forEach(t => {
+      const o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      sel.appendChild(o);
+    });
+  });
+  if (tabs.length){
+    if (!activeTab || !tabs.includes(activeTab)) activeTab = tabs[0];
+    $('activeTab').value = activeTab;
+    $('fTab').value = activeTab;
+  }
+}
+
+function render(){
+  populateTabSelects();
+  const list = $('entryList');
+  const forTab = entries.filter(e => e.tab === activeTab).sort((a,b) => b.createdAt - a.createdAt);
+  const total = forTab.reduce((s,e) => s + (parseFloat(e.total)||0), 0);
+  $('totalAmount').textContent = total.toFixed(3);
+  $('entryCount').textContent = forTab.length;
+
+  const pendingCount = forTab.filter(e => !e.synced).length;
+  const pendingNote = $('pendingNote');
+  if (pendingCount > 0){
+    pendingNote.style.display = 'block';
+    pendingNote.textContent = pendingCount + ' bill(s) waiting to sync';
+  } else {
+    pendingNote.style.display = 'none';
+  }
+
+  if (!forTab.length){
+    list.innerHTML = '<div class="empty">No bills yet in this tab.<br>Tap "+ Add Bill" to log your first one.</div>';
+    return;
+  }
+
+  list.innerHTML = forTab.map(e => `
+    <div class="stub">
+      ${e.thumb ? `<img class="thumb" src="${e.thumb}">` : `<div class="stub-sn">#${e.sn ?? '—'}</div>`}
+      <div class="stub-body">
+        <div class="stub-top">
+          <div class="stub-vendor">${escapeHtml(e.vendor || '(no vendor)')}</div>
+          <div class="stub-total mono">${(parseFloat(e.total)||0).toFixed(3)}</div>
+        </div>
+        <div class="stub-meta">
+          <span>${e.date}</span>
+          ${e.billNo ? `<span>#${escapeHtml(e.billNo)}</span>` : ''}
+          <span class="badge ${e.synced ? 'synced' : 'pending'}">${e.synced ? 'Synced' : 'Pending'}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- Settings ----
+function openSettings(){
+  $('scriptUrlInput').value = scriptUrl;
+  $('settingsStatus').textContent = '';
+  $('settingsModal').classList.remove('hidden');
+}
+$('settingsBtn').onclick = openSettings;
+$('closeSettingsBtn').onclick = () => $('settingsModal').classList.add('hidden');
+
+$('saveSettingsBtn').onclick = async () => {
+  const url = $('scriptUrlInput').value.trim();
+  if (!url){ setStatus('settingsStatus','Enter a URL first','err'); return; }
+  scriptUrl = url;
+  localStorage.setItem(LS_KEYS.url, scriptUrl);
+  setStatus('settingsStatus','Connecting…','');
+  try {
+    const res = await fetch(scriptUrl + '?action=tabs');
+    const data = await res.json();
+    if (data.ok && data.tabs){
+      tabs = data.tabs;
+      saveTabs();
+      populateTabSelects();
+      setStatus('settingsStatus', 'Connected — found ' + tabs.length + ' tabs', 'ok');
+      render();
+    } else {
+      setStatus('settingsStatus', data.error || 'Could not read tabs', 'err');
+    }
+  } catch(err){
+    setStatus('settingsStatus', 'Connection failed — check the URL', 'err');
+  }
+};
+
+$('syncNowBtn').onclick = () => syncPending(true);
+
+function setStatus(id, msg, cls){
+  const el = $(id);
+  el.textContent = msg;
+  el.className = 'status-msg ' + (cls||'');
+}
+
+// ---- Add Bill modal ----
+$('addBillBtn').onclick = () => {
+  if (!scriptUrl){ openSettings(); return; }
+  $('fDate').value = new Date().toISOString().slice(0,10);
+  $('fBillNo').value = ''; $('fVendor').value = ''; $('fAmount').value=''; $('fVat').value='';
+  $('computedTotal').textContent = '0.000';
+  $('billStatus').textContent = '';
+  capturedPhoto = null;
+  $('photoPreview').style.display = 'none';
+  $('photoBtn').textContent = '📷 Tap to capture bill photo (optional)';
+  $('fTab').value = activeTab;
+  $('billModal').classList.remove('hidden');
+};
+$('cancelBillBtn').onclick = () => $('billModal').classList.add('hidden');
+
+$('photoBtn').onclick = () => $('photoInput').click();
+$('photoInput').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 1000;
+      const scale = Math.min(1, maxW / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      capturedPhoto = { base64: dataUrl.split(',')[1], previewUrl: dataUrl };
+      $('photoPreview').src = dataUrl;
+      $('photoPreview').style.display = 'block';
+      $('photoBtn').textContent = '📷 Retake photo';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+function recalcTotal(){
+  const amt = parseFloat($('fAmount').value) || 0;
+  const vat = parseFloat($('fVat').value) || 0;
+  $('computedTotal').textContent = (amt+vat).toFixed(3);
+}
+$('fAmount').oninput = recalcTotal;
+$('fVat').oninput = recalcTotal;
+
+$('submitBillBtn').onclick = async () => {
+  const tab = $('fTab').value;
+  const date = $('fDate').value;
+  const amount = parseFloat($('fAmount').value) || 0;
+  const vendor = $('fVendor').value.trim();
+  if (!date || !amount){ setStatus('billStatus','Date and amount are required','err'); return; }
+
+  const entry = {
+    id: 'e' + Date.now(),
+    tab, date,
+    billNo: $('fBillNo').value.trim(),
+    vendor,
+    amount,
+    vat: $('fVat').value ? parseFloat($('fVat').value) : '',
+    total: amount + (parseFloat($('fVat').value)||0),
+    photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
+    thumb: capturedPhoto ? capturedPhoto.previewUrl : null,
+    synced: false,
+    sn: null,
+    createdAt: Date.now()
+  };
+  entries.push(entry);
+  saveEntries();
+  activeTab = tab;
+  localStorage.setItem(LS_KEYS.activeTab, activeTab);
+  render();
+  $('billModal').classList.add('hidden');
+  syncPending(false);
+};
+
+// ---- Sync ----
+async function syncOne(entry){
+  const payload = {
+    tab: entry.tab, date: entry.date, billNo: entry.billNo,
+    vendor: entry.vendor, amount: entry.amount, vat: entry.vat,
+    photoBase64: entry.photoBase64
+  };
+  const res = await fetch(scriptUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight with Apps Script
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'Sync failed');
+  entry.synced = true;
+  entry.sn = data.sn;
+  if (data.photoUrl) entry.photoUrl = data.photoUrl;
+  entry.photoBase64 = null; // drop the heavy payload once safely stored in Drive
+}
+
+async function syncPending(manual){
+  if (!scriptUrl || !navigator.onLine) return;
+  const pending = entries.filter(e => !e.synced);
+  let anySynced = false;
+  for (const entry of pending){
+    try { await syncOne(entry); anySynced = true; }
+    catch(err){ console.warn('Sync failed for entry', entry.id, err); }
+  }
+  if (anySynced){ saveEntries(); render(); }
+  if (manual) setStatus('settingsStatus', anySynced ? 'Synced!' : (pending.length ? 'Still offline or unreachable' : 'Nothing to sync'), anySynced ? 'ok' : '');
+}
+window.addEventListener('online', () => syncPending(false));
+
+$('activeTab').onchange = (e) => {
+  activeTab = e.target.value;
+  localStorage.setItem(LS_KEYS.activeTab, activeTab);
+  render();
+};
+
+// ---- Init ----
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+}
+if (scriptUrl && tabs.length){
+  render();
+} else if (scriptUrl){
+  fetch(scriptUrl + '?action=tabs').then(r=>r.json()).then(d=>{
+    if (d.ok){ tabs = d.tabs; saveTabs(); render(); }
+  }).catch(()=>{ render(); });
+} else {
+  render();
+  openSettings();
+}
+setInterval(() => syncPending(false), 30000);
+</script>
+</body>
+</html>
