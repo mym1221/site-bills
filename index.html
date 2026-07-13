@@ -587,9 +587,22 @@ $('saveSettingsBtn').onclick = async () => {
 $('syncNowBtn').onclick = () => syncPending(true);
 
 $('createTabBtn').onclick = async () => {
-  const name = $('newTabName').value.trim();
+  let name = $('newTabName').value.trim();
   if (!name){ setStatus('tabStatus','Enter a tab name first','err'); return; }
   if (!scriptUrl){ setStatus('tabStatus','Connect to your sheet first','err'); return; }
+
+  const info = parseTabMonthYear(name);
+  if (info){
+    const canonical = MONTH_NAMES[info.month-1].toUpperCase() + '-' + info.year;
+    if (canonical !== name){
+      const useCanonical = confirm(`To keep all your month tabs in the same style, this will be named "${canonical}" (matching your other tabs) instead of "${name}".\n\nTap OK to use "${canonical}", or Cancel to keep "${name}" exactly as you typed it.`);
+      if (useCanonical) name = canonical;
+    }
+  } else {
+    const proceed = confirm(`"${name}" doesn't look like a standard month tab (e.g. MARCH-2026). Bills added here won't get the date-mismatch check.\n\nCreate it anyway?`);
+    if (!proceed) return;
+  }
+
   setStatus('tabStatus','Creating…','');
   try {
     const res = await fetch(scriptUrl, {
@@ -668,6 +681,23 @@ function recalcTotal(){
 $('fAmount').oninput = recalcTotal;
 $('fVat').oninput = recalcTotal;
 
+const MONTH_NAMES = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+function parseTabMonthYear(tabName){
+  const lower = String(tabName).toLowerCase();
+  const yearMatch = lower.match(/\d{4}/);
+  if (!yearMatch) return null;
+  let monthIdx = -1;
+  for (let i=0;i<MONTH_NAMES.length;i++){ if (lower.includes(MONTH_NAMES[i])) { monthIdx = i; break; } }
+  if (monthIdx === -1){
+    for (let i=0;i<MONTH_NAMES.length;i++){
+      const abbr = MONTH_NAMES[i].slice(0,3);
+      if (new RegExp('\\b'+abbr+'\\b','i').test(tabName)) { monthIdx = i; break; }
+    }
+  }
+  if (monthIdx === -1) return null;
+  return { month: monthIdx+1, year: parseInt(yearMatch[0]), label: MONTH_NAMES[monthIdx] };
+}
+
 let isSubmitting = false;
 let skipDuplicateCheck = false;
 
@@ -677,6 +707,21 @@ $('submitBillBtn').onclick = async () => {
   const amount = parseFloat($('fAmount').value)||0;
   const billNo = $('fBillNo').value.trim();
   if (!date || !amount){ setStatus('billStatus','Date and amount are required','err'); return; }
+
+  const tabInfo = parseTabMonthYear(tab);
+  if (tabInfo){
+    const d = new Date(date + 'T00:00:00');
+    if (d.getMonth()+1 !== tabInfo.month || d.getFullYear() !== tabInfo.year){
+      const monthLabel = tabInfo.label.charAt(0).toUpperCase() + tabInfo.label.slice(1);
+      const proceed = confirm(
+        `This bill's date is ${date}, but you're adding it to the "${tab}" tab (${monthLabel} ${tabInfo.year}).\n\nCheck the date or the tab — tap OK to add it anyway, or Cancel to fix it.`
+      );
+      if (!proceed){
+        setStatus('billStatus','Save cancelled — check the date or tab.','err');
+        return;
+      }
+    }
+  }
 
   isSubmitting = true;
   $('submitBillBtn').disabled = true;
