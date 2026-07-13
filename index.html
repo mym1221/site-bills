@@ -18,16 +18,18 @@
     --green:#3fb27f; --amber:#f0a83e; --red:#e0605a;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--ink);color:#eef1f4;font-family:'Inter',sans-serif;}
-  body{padding-bottom:32px; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--ink);color:#eef1f4;font-family:'Inter',sans-serif;height:100%;}
+  body{-webkit-tap-highlight-color:transparent;}
   h1,h2,h3{font-family:'Oswald',sans-serif; margin:0; letter-spacing:.02em;}
   .mono{font-family:'IBM Plex Mono',monospace;}
-  #app{max-width:520px;margin:0 auto;padding:0 16px;}
+  #app{max-width:520px;margin:0 auto;padding:0 16px 90px;min-height:100vh;}
+  .view{display:none;}
+  .view.active{display:block;}
 
   header{display:flex;align-items:center;justify-content:space-between;padding:22px 0 14px;}
   .brand{font-family:'Oswald',sans-serif;font-weight:700;font-size:22px;text-transform:uppercase;letter-spacing:.06em;}
   .brand span{color:var(--accent);}
-  #settingsBtn{background:var(--panel);border:1px solid #3a4350;color:#eef1f4;width:40px;height:40px;border-radius:10px;font-size:18px;cursor:pointer;}
+  .icon-btn{background:var(--panel);border:1px solid #3a4350;color:#eef1f4;width:40px;height:40px;border-radius:10px;font-size:18px;cursor:pointer;}
 
   .totals-card{background:var(--panel);border-radius:16px;padding:18px 20px;border:1px solid #333c47;}
   .tab-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
@@ -40,24 +42,33 @@
   .add-btn{width:100%;margin-top:16px;padding:16px;border:none;border-radius:14px;background:var(--accent);color:#1c1200;font-family:'Oswald',sans-serif;font-weight:600;font-size:16px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;}
   .add-btn:active{background:var(--accent-dark);}
 
-  .section-label{margin:26px 0 10px;font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;}
+  .section-label{margin:26px 0 10px;font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;}
+  .link-btn{background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;font-weight:600;text-transform:none;letter-spacing:0;}
+
+  .search-box{width:100%;background:var(--panel);border:1px solid #3a4350;color:#eef1f4;border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:14px;}
+  .search-box::placeholder{color:var(--muted-2);}
 
   .entry-list{display:flex;flex-direction:column;gap:10px;}
   .empty{color:var(--muted-2);font-size:14px;text-align:center;padding:40px 10px;border:1px dashed #3a4350;border-radius:14px;}
 
-  .stub{background:var(--paper);color:var(--text-dark);border-radius:12px;padding:14px 16px;position:relative;display:flex;gap:12px;align-items:flex-start;
-    background-image:repeating-linear-gradient(to bottom, transparent 0 8px, var(--paper-line) 8px 9px);
-    background-size:1px 100%; background-repeat:no-repeat; background-position:right 54px top 0;}
-  .stub-sn{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;background:var(--text-dark);color:var(--paper);border-radius:6px;padding:3px 7px;flex-shrink:0;transform:rotate(-3deg);}
+  .stub{background:var(--paper);color:var(--text-dark);border-radius:12px;padding:14px 16px;position:relative;display:flex;gap:12px;align-items:flex-start;cursor:pointer;}
+  .stub-sn{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:11px;background:var(--text-dark);color:var(--paper);border-radius:6px;padding:3px 7px;flex-shrink:0;transform:rotate(-3deg);height:fit-content;}
   .stub-body{flex:1;min-width:0;}
   .stub-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline;}
   .stub-vendor{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .stub-total{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px;flex-shrink:0;}
-  .stub-meta{font-size:12px;color:#6b7684;margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;}
+  .stub-meta{font-size:12px;color:#6b7684;margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
   .badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
   .badge.synced{background:#e3f5ec;color:var(--green);}
   .badge.pending{background:#fdf1de;color:#b9740b;}
   .thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--paper-line);}
+
+  /* Bottom nav */
+  .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid #333c47;display:flex;padding:8px 0 calc(8px + env(safe-area-inset-bottom));z-index:40;}
+  .bottom-nav .navwrap{max-width:520px;margin:0 auto;display:flex;width:100%;}
+  .nav-btn{flex:1;background:none;border:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-family:'Inter',sans-serif;padding:6px 0;cursor:pointer;letter-spacing:.02em;}
+  .nav-btn .ic{font-size:19px;}
+  .nav-btn.active{color:var(--accent);}
 
   .modal{position:fixed;inset:0;background:rgba(10,12,15,.72);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
   .modal.hidden{display:none;}
@@ -81,34 +92,124 @@
   .btn{flex:1;padding:14px;border-radius:12px;border:none;font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;}
   .btn-primary{background:var(--accent);color:#1c1200;}
   .btn-ghost{background:transparent;color:var(--muted);border:1px solid #3a4350;}
+  .btn-danger{background:transparent;color:var(--red);border:1px solid #5a3535;}
 
   .help-text{font-size:12px;color:var(--muted-2);line-height:1.5;margin-bottom:14px;}
   .status-msg{font-size:13px;margin-top:10px;text-align:center;min-height:16px;}
   .status-msg.ok{color:var(--green);}
   .status-msg.err{color:var(--red);}
+
+  .detail-photo{width:100%;border-radius:14px;margin-bottom:16px;max-height:280px;object-fit:cover;}
+  .detail-row{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #333c47;font-size:14px;}
+  .detail-row span:first-child{color:var(--muted);}
+  .detail-row span:last-child{font-family:'IBM Plex Mono',monospace;}
+
+  .settings-block{margin-bottom:22px;}
+  .settings-block h3{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:10px;}
+
+  /* PIN lock */
+  #lockScreen{position:fixed;inset:0;background:var(--ink);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;}
+  #lockScreen.hidden{display:none;}
+  .pin-dots{display:flex;gap:16px;}
+  .pin-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--muted);}
+  .pin-dot.filled{background:var(--accent);border-color:var(--accent);}
+  .pin-pad{display:grid;grid-template-columns:repeat(3,64px);gap:16px;}
+  .pin-key{width:64px;height:64px;border-radius:50%;background:var(--panel);border:1px solid #3a4350;color:#eef1f4;font-size:22px;font-family:'IBM Plex Mono',monospace;cursor:pointer;}
+  .pin-key:active{background:var(--panel-2);}
+  .pin-key.wide{background:none;border:none;color:var(--muted);font-size:14px;}
+  #lockTitle{font-family:'Oswald',sans-serif;font-size:16px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;}
+  #lockError{color:var(--red);font-size:13px;height:16px;}
 </style>
 </head>
 <body>
+
+<!-- PIN LOCK -->
+<div id="lockScreen" class="hidden">
+  <div class="brand">SITE<span>BILLS</span></div>
+  <div id="lockTitle">Enter PIN</div>
+  <div class="pin-dots" id="pinDots"></div>
+  <div id="lockError"></div>
+  <div class="pin-pad" id="pinPad"></div>
+  <button class="link-btn" id="forgotPinBtn" style="margin-top:6px;">Reset PIN</button>
+</div>
+
 <div id="app">
-  <header>
-    <div class="brand">SITE<span>BILLS</span></div>
-    <button id="settingsBtn">⚙</button>
-  </header>
+  <!-- HOME -->
+  <div class="view active" id="view-home">
+    <header>
+      <div class="brand">SITE<span>BILLS</span></div>
+      <button class="icon-btn" id="settingsShortcut">⚙</button>
+    </header>
 
-  <section class="totals-card">
-    <div class="tab-row">
-      <label for="activeTab">Ledger tab</label>
-      <select id="activeTab"></select>
+    <section class="totals-card">
+      <div class="tab-row">
+        <label for="activeTab">Ledger tab</label>
+        <select id="activeTab"></select>
+      </div>
+      <div class="total-amount mono" id="totalAmount">0.000</div>
+      <div class="total-sub"><span id="entryCount">0</span> bills in this tab</div>
+      <div class="pending-note" id="pendingNote" style="display:none;"></div>
+    </section>
+
+    <button class="add-btn" id="addBillBtn">+ Add Bill</button>
+
+    <div class="section-label">Recent entries</div>
+    <div class="entry-list" id="homeEntryList"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="view" id="view-history">
+    <header><h2>History</h2></header>
+    <input class="search-box" id="searchBox" placeholder="Search vendor or bill no...">
+    <select id="historyTabFilter" style="width:100%;margin-bottom:14px;">
+      <option value="__all">All tabs</option>
+    </select>
+    <div class="entry-list" id="historyEntryList"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="view" id="view-settings">
+    <header><h2>Settings</h2></header>
+
+    <div class="settings-block">
+      <h3>Connection</h3>
+      <p class="help-text">Paste the Web App URL from your Google Apps Script deployment.</p>
+      <div class="field">
+        <label for="scriptUrlInput">Apps Script Web App URL</label>
+        <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <button class="btn btn-primary" style="width:100%;" id="saveSettingsBtn">Save & Connect</button>
+      <div class="status-msg" id="settingsStatus"></div>
     </div>
-    <div class="total-amount mono" id="totalAmount">0.000</div>
-    <div class="total-sub"><span id="entryCount">0</span> bills in this tab</div>
-    <div class="pending-note" id="pendingNote" style="display:none;"></div>
-  </section>
 
-  <button class="add-btn" id="addBillBtn">+ Add Bill</button>
+    <div class="settings-block">
+      <h3>Sync</h3>
+      <button class="btn btn-ghost" style="width:100%;" id="syncNowBtn">Sync Pending Bills</button>
+    </div>
 
-  <div class="section-label">Recent entries</div>
-  <div class="entry-list" id="entryList"></div>
+    <div class="settings-block">
+      <h3>Add a new month tab</h3>
+      <p class="help-text">Creates a fresh tab in your Sheet with the right headers, ready for a new month.</p>
+      <div class="field">
+        <input type="text" id="newTabName" placeholder="e.g. APRIL-2026">
+      </div>
+      <button class="btn btn-ghost" style="width:100%;" id="createTabBtn">Create Tab</button>
+      <div class="status-msg" id="tabStatus"></div>
+    </div>
+
+    <div class="settings-block">
+      <h3>Security</h3>
+      <button class="btn btn-ghost" style="width:100%;" id="changePinBtn">Change PIN</button>
+    </div>
+  </div>
+</div>
+
+<div class="bottom-nav">
+  <div class="navwrap">
+    <button class="nav-btn active" data-view="home"><span class="ic">🏠</span>Home</button>
+    <button class="nav-btn" data-view="history"><span class="ic">📋</span>History</button>
+    <button class="nav-btn" data-view="settings"><span class="ic">⚙</span>Settings</button>
+  </div>
 </div>
 
 <!-- Add Bill Modal -->
@@ -159,49 +260,156 @@
   </div>
 </div>
 
-<!-- Settings Modal -->
-<div class="modal hidden" id="settingsModal">
+<!-- Bill Detail Modal -->
+<div class="modal hidden" id="detailModal">
+  <div class="sheet" id="detailSheet">
+    <h2>Bill Details</h2>
+    <img id="detailPhoto" class="detail-photo" style="display:none;">
+    <div id="detailFields"></div>
+    <div class="btn-row" style="margin-top:16px;">
+      <button class="btn btn-ghost" id="closeDetailBtn">Close</button>
+      <button class="btn btn-danger" id="deleteDetailBtn">Delete Bill</button>
+    </div>
+    <div class="status-msg" id="detailStatus"></div>
+  </div>
+</div>
+
+<!-- PIN setup Modal -->
+<div class="modal hidden" id="pinSetupModal">
   <div class="sheet">
-    <h2>Settings</h2>
-    <p class="help-text">Paste the Web App URL from your Google Apps Script deployment (see SETUP-GUIDE.md). This connects the app to your Google Sheet.</p>
-    <div class="field">
-      <label for="scriptUrlInput">Apps Script Web App URL</label>
-      <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-ghost" id="closeSettingsBtn">Close</button>
-      <button class="btn btn-primary" id="saveSettingsBtn">Save & Connect</button>
-    </div>
-    <div class="status-msg" id="settingsStatus"></div>
-    <div class="btn-row" style="margin-top:18px;">
-      <button class="btn btn-ghost" id="syncNowBtn">Sync Pending Bills</button>
-    </div>
+    <h2>Set a PIN</h2>
+    <p class="help-text">This locks the app so bills stay private if someone picks up your phone. You'll enter this 4-digit PIN each time you open the app.</p>
+    <div class="field"><label for="newPin1">New 4-digit PIN</label><input type="password" inputmode="numeric" maxlength="4" id="newPin1" class="mono"></div>
+    <div class="field"><label for="newPin2">Confirm PIN</label><input type="password" inputmode="numeric" maxlength="4" id="newPin2" class="mono"></div>
+    <button class="btn btn-primary" style="width:100%;" id="savePinBtn">Save PIN</button>
+    <div class="status-msg" id="pinSetupStatus"></div>
   </div>
 </div>
 
 <script>
-const LS_KEYS = { url: 'sb_script_url', tabs: 'sb_tabs', entries: 'sb_entries', activeTab: 'sb_active_tab' };
+const LS_KEYS = { url:'sb_script_url', tabs:'sb_tabs', entries:'sb_entries', activeTab:'sb_active_tab', pin:'sb_pin' };
 
 let scriptUrl = localStorage.getItem(LS_KEYS.url) || '';
 let tabs = JSON.parse(localStorage.getItem(LS_KEYS.tabs) || '[]');
 let entries = JSON.parse(localStorage.getItem(LS_KEYS.entries) || '[]');
 let activeTab = localStorage.getItem(LS_KEYS.activeTab) || '';
-let capturedPhoto = null; // {base64, previewUrl}
+let capturedPhoto = null;
+let currentDetailEntry = null;
+let pinEntry = '';
+let pinMode = 'unlock'; // 'unlock' | 'setup-first' | 'setup-change'
+let firstPinTemp = '';
 
 const $ = (id) => document.getElementById(id);
+const saveEntries = () => localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries));
+const saveTabs = () => localStorage.setItem(LS_KEYS.tabs, JSON.stringify(tabs));
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-function saveEntries(){ localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries)); }
-function saveTabs(){ localStorage.setItem(LS_KEYS.tabs, JSON.stringify(tabs)); }
+/* ---------------- PIN LOCK ---------------- */
+function buildPinPad(){
+  const keys = ['1','2','3','4','5','6','7','8','9','','0','del'];
+  $('pinPad').innerHTML = keys.map(k => {
+    if (k === '') return '<div></div>';
+    if (k === 'del') return '<button class="pin-key wide" id="pinDel">⌫</button>';
+    return `<button class="pin-key" data-num="${k}">${k}</button>`;
+  }).join('');
+  $('pinPad').querySelectorAll('[data-num]').forEach(btn => {
+    btn.onclick = () => pinPress(btn.dataset.num);
+  });
+  $('pinDel').onclick = () => { pinEntry = pinEntry.slice(0,-1); renderPinDots(); };
+}
+function renderPinDots(){
+  $('pinDots').innerHTML = [0,1,2,3].map(i => `<div class="pin-dot ${i < pinEntry.length ? 'filled':''}"></div>`).join('');
+}
+function pinPress(n){
+  if (pinEntry.length >= 4) return;
+  pinEntry += n;
+  renderPinDots();
+  if (pinEntry.length === 4) setTimeout(handlePinComplete, 150);
+}
+function handlePinComplete(){
+  const stored = localStorage.getItem(LS_KEYS.pin);
+  if (pinMode === 'unlock'){
+    if (pinEntry === stored){
+      $('lockScreen').classList.add('hidden');
+    } else {
+      $('lockError').textContent = 'Wrong PIN, try again';
+      pinEntry = ''; renderPinDots();
+    }
+  } else if (pinMode === 'setup-first' || pinMode === 'setup-change'){
+    if (!firstPinTemp){
+      firstPinTemp = pinEntry;
+      pinEntry = '';
+      $('lockTitle').textContent = 'Confirm PIN';
+      renderPinDots();
+    } else {
+      if (pinEntry === firstPinTemp){
+        localStorage.setItem(LS_KEYS.pin, pinEntry);
+        firstPinTemp = '';
+        $('lockScreen').classList.add('hidden');
+      } else {
+        $('lockError').textContent = "PINs didn't match, start over";
+        firstPinTemp = ''; pinEntry = '';
+        $('lockTitle').textContent = pinMode === 'setup-first' ? 'Set a 4-digit PIN' : 'Enter new PIN';
+        renderPinDots();
+      }
+    }
+  }
+}
+function startUnlock(){
+  const stored = localStorage.getItem(LS_KEYS.pin);
+  pinEntry = ''; firstPinTemp = '';
+  $('lockError').textContent = '';
+  if (!stored){
+    pinMode = 'setup-first';
+    $('lockTitle').textContent = 'Set a 4-digit PIN';
+    $('forgotPinBtn').style.display = 'none';
+  } else {
+    pinMode = 'unlock';
+    $('lockTitle').textContent = 'Enter PIN';
+    $('forgotPinBtn').style.display = 'block';
+  }
+  renderPinDots();
+  $('lockScreen').classList.remove('hidden');
+}
+$('forgotPinBtn').onclick = () => {
+  if (confirm('This clears your PIN and reopens the app unlocked. Continue?')){
+    localStorage.removeItem(LS_KEYS.pin);
+    $('lockScreen').classList.add('hidden');
+  }
+};
+$('changePinBtn').onclick = () => {
+  pinMode = 'setup-change'; pinEntry=''; firstPinTemp='';
+  $('lockError').textContent = '';
+  $('lockTitle').textContent = 'Enter new PIN';
+  $('forgotPinBtn').style.display = 'none';
+  renderPinDots();
+  $('lockScreen').classList.remove('hidden');
+};
 
+/* ---------------- NAV ---------------- */
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.onclick = () => switchView(btn.dataset.view);
+});
+function switchView(name){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  $('view-' + name).classList.add('active');
+  document.querySelector(`.nav-btn[data-view="${name}"]`).classList.add('active');
+  if (name === 'history') renderHistory();
+}
+$('settingsShortcut').onclick = () => switchView('settings');
+
+/* ---------------- RENDER ---------------- */
 function populateTabSelects(){
   [$('activeTab'), $('fTab')].forEach(sel => {
     sel.innerHTML = '';
     tabs.forEach(t => {
-      const o = document.createElement('option');
-      o.value = t; o.textContent = t;
+      const o = document.createElement('option'); o.value = t; o.textContent = t;
       sel.appendChild(o);
     });
   });
+  $('historyTabFilter').innerHTML = '<option value="__all">All tabs</option>' +
+    tabs.map(t => `<option value="${t}">${t}</option>`).join('');
   if (tabs.length){
     if (!activeTab || !tabs.includes(activeTab)) activeTab = tabs[0];
     $('activeTab').value = activeTab;
@@ -209,30 +417,9 @@ function populateTabSelects(){
   }
 }
 
-function render(){
-  populateTabSelects();
-  const list = $('entryList');
-  const forTab = entries.filter(e => e.tab === activeTab).sort((a,b) => b.createdAt - a.createdAt);
-  const total = forTab.reduce((s,e) => s + (parseFloat(e.total)||0), 0);
-  $('totalAmount').textContent = total.toFixed(3);
-  $('entryCount').textContent = forTab.length;
-
-  const pendingCount = forTab.filter(e => !e.synced).length;
-  const pendingNote = $('pendingNote');
-  if (pendingCount > 0){
-    pendingNote.style.display = 'block';
-    pendingNote.textContent = pendingCount + ' bill(s) waiting to sync';
-  } else {
-    pendingNote.style.display = 'none';
-  }
-
-  if (!forTab.length){
-    list.innerHTML = '<div class="empty">No bills yet in this tab.<br>Tap "+ Add Bill" to log your first one.</div>';
-    return;
-  }
-
-  list.innerHTML = forTab.map(e => `
-    <div class="stub">
+function stubHtml(e){
+  return `
+    <div class="stub" data-id="${e.id}">
       ${e.thumb ? `<img class="thumb" src="${e.thumb}">` : `<div class="stub-sn">#${e.sn ?? '—'}</div>`}
       <div class="stub-body">
         <div class="stub-top">
@@ -242,25 +429,94 @@ function render(){
         <div class="stub-meta">
           <span>${e.date}</span>
           ${e.billNo ? `<span>#${escapeHtml(e.billNo)}</span>` : ''}
-          <span class="badge ${e.synced ? 'synced' : 'pending'}">${e.synced ? 'Synced' : 'Pending'}</span>
+          <span class="badge ${e.synced ? 'synced':'pending'}">${e.synced ? 'Synced':'Pending'}</span>
         </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
 }
 
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function render(){
+  populateTabSelects();
+  const forTab = entries.filter(e => e.tab === activeTab).sort((a,b)=>b.createdAt-a.createdAt);
+  const total = forTab.reduce((s,e)=>s+(parseFloat(e.total)||0),0);
+  $('totalAmount').textContent = total.toFixed(3);
+  $('entryCount').textContent = forTab.length;
+
+  const pendingCount = forTab.filter(e=>!e.synced).length;
+  $('pendingNote').style.display = pendingCount ? 'block' : 'none';
+  if (pendingCount) $('pendingNote').textContent = pendingCount + ' bill(s) waiting to sync';
+
+  const recent = forTab.slice(0,5);
+  $('homeEntryList').innerHTML = recent.length ? recent.map(stubHtml).join('') :
+    '<div class="empty">No bills yet in this tab.<br>Tap "+ Add Bill" to log your first one.</div>';
+  attachStubHandlers($('homeEntryList'));
 }
 
-// ---- Settings ----
-function openSettings(){
-  $('scriptUrlInput').value = scriptUrl;
-  $('settingsStatus').textContent = '';
-  $('settingsModal').classList.remove('hidden');
+function renderHistory(){
+  const q = $('searchBox').value.trim().toLowerCase();
+  const tabFilter = $('historyTabFilter').value;
+  let list = entries.slice().sort((a,b)=>b.createdAt-a.createdAt);
+  if (tabFilter !== '__all') list = list.filter(e => e.tab === tabFilter);
+  if (q) list = list.filter(e => (e.vendor||'').toLowerCase().includes(q) || (e.billNo||'').toLowerCase().includes(q));
+  $('historyEntryList').innerHTML = list.length ? list.map(stubHtml).join('') :
+    '<div class="empty">No bills match.</div>';
+  attachStubHandlers($('historyEntryList'));
 }
-$('settingsBtn').onclick = openSettings;
-$('closeSettingsBtn').onclick = () => $('settingsModal').classList.add('hidden');
+$('searchBox').oninput = renderHistory;
+$('historyTabFilter').onchange = renderHistory;
+
+function attachStubHandlers(container){
+  container.querySelectorAll('.stub').forEach(el => {
+    el.onclick = () => openDetail(el.dataset.id);
+  });
+}
+
+/* ---------------- DETAIL MODAL ---------------- */
+function openDetail(id){
+  const e = entries.find(x => x.id === id);
+  if (!e) return;
+  currentDetailEntry = e;
+  const photoSrc = e.photoUrl || e.thumb;
+  if (photoSrc){ $('detailPhoto').src = e.thumb || e.photoUrl; $('detailPhoto').style.display='block'; }
+  else { $('detailPhoto').style.display='none'; }
+  $('detailFields').innerHTML = `
+    <div class="detail-row"><span>Tab</span><span>${escapeHtml(e.tab)}</span></div>
+    <div class="detail-row"><span>Date</span><span>${e.date}</span></div>
+    <div class="detail-row"><span>Bill No</span><span>${escapeHtml(e.billNo || '—')}</span></div>
+    <div class="detail-row"><span>Vendor</span><span>${escapeHtml(e.vendor || '—')}</span></div>
+    <div class="detail-row"><span>Amount</span><span>${(parseFloat(e.amount)||0).toFixed(3)}</span></div>
+    <div class="detail-row"><span>VAT</span><span>${e.vat !== '' && e.vat !== undefined ? parseFloat(e.vat).toFixed(3) : '—'}</span></div>
+    <div class="detail-row"><span>Total</span><span>${(parseFloat(e.total)||0).toFixed(3)}</span></div>
+    <div class="detail-row"><span>Status</span><span>${e.synced ? 'Synced (S/N #'+e.sn+')' : 'Pending sync'}</span></div>
+    ${e.photoUrl ? `<div class="detail-row"><span>Photo</span><span><a href="${e.photoUrl}" target="_blank" style="color:var(--accent);">Open in Drive</a></span></div>` : ''}
+  `;
+  $('detailStatus').textContent = '';
+  $('detailModal').classList.remove('hidden');
+}
+$('closeDetailBtn').onclick = () => $('detailModal').classList.add('hidden');
+$('deleteDetailBtn').onclick = async () => {
+  if (!currentDetailEntry) return;
+  if (!confirm('Delete this bill? This also removes it from your Google Sheet if already synced.')) return;
+  const e = currentDetailEntry;
+  if (e.synced && scriptUrl){
+    setStatus('detailStatus','Deleting…','');
+    try {
+      const res = await fetch(scriptUrl, {
+        method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({ action:'delete', tab:e.tab, sn:e.sn })
+      });
+      const data = await res.json();
+      if (!data.ok){ setStatus('detailStatus', data.error || 'Delete failed', 'err'); return; }
+    } catch(err){ setStatus('detailStatus','Could not reach sheet — check connection','err'); return; }
+  }
+  entries = entries.filter(x => x.id !== e.id);
+  saveEntries();
+  $('detailModal').classList.add('hidden');
+  render(); renderHistory();
+};
+
+/* ---------------- SETTINGS ---------------- */
+function setStatus(id,msg,cls){ const el=$(id); el.textContent=msg; el.className='status-msg '+(cls||''); }
 
 $('saveSettingsBtn').onclick = async () => {
   const url = $('scriptUrlInput').value.trim();
@@ -272,159 +528,124 @@ $('saveSettingsBtn').onclick = async () => {
     const res = await fetch(scriptUrl + '?action=tabs');
     const data = await res.json();
     if (data.ok && data.tabs){
-      tabs = data.tabs;
-      saveTabs();
-      populateTabSelects();
-      setStatus('settingsStatus', 'Connected — found ' + tabs.length + ' tabs', 'ok');
+      tabs = data.tabs; saveTabs(); populateTabSelects();
+      setStatus('settingsStatus','Connected — found ' + tabs.length + ' tabs','ok');
       render();
-    } else {
-      setStatus('settingsStatus', data.error || 'Could not read tabs', 'err');
-    }
-  } catch(err){
-    setStatus('settingsStatus', 'Connection failed — check the URL', 'err');
-  }
+    } else setStatus('settingsStatus', data.error || 'Could not read tabs','err');
+  } catch(err){ setStatus('settingsStatus','Connection failed — check the URL','err'); }
 };
 
 $('syncNowBtn').onclick = () => syncPending(true);
 
-function setStatus(id, msg, cls){
-  const el = $(id);
-  el.textContent = msg;
-  el.className = 'status-msg ' + (cls||'');
-}
+$('createTabBtn').onclick = async () => {
+  const name = $('newTabName').value.trim();
+  if (!name){ setStatus('tabStatus','Enter a tab name first','err'); return; }
+  if (!scriptUrl){ setStatus('tabStatus','Connect to your sheet first','err'); return; }
+  setStatus('tabStatus','Creating…','');
+  try {
+    const res = await fetch(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'createTab', tabName:name })
+    });
+    const data = await res.json();
+    if (data.ok){
+      tabs = data.tabs; saveTabs(); populateTabSelects();
+      setStatus('tabStatus','Tab "'+name+'" created','ok');
+      $('newTabName').value = '';
+    } else setStatus('tabStatus', data.error || 'Failed to create tab','err');
+  } catch(err){ setStatus('tabStatus','Could not reach sheet','err'); }
+};
 
-// ---- Add Bill modal ----
+/* ---------------- ADD BILL ---------------- */
 $('addBillBtn').onclick = () => {
-  if (!scriptUrl){ openSettings(); return; }
+  if (!scriptUrl){ switchView('settings'); return; }
   $('fDate').value = new Date().toISOString().slice(0,10);
-  $('fBillNo').value = ''; $('fVendor').value = ''; $('fAmount').value=''; $('fVat').value='';
-  $('computedTotal').textContent = '0.000';
-  $('billStatus').textContent = '';
-  capturedPhoto = null;
-  $('photoPreview').style.display = 'none';
-  $('photoBtn').textContent = '📷 Tap to capture bill photo (optional)';
+  $('fBillNo').value=''; $('fVendor').value=''; $('fAmount').value=''; $('fVat').value='';
+  $('computedTotal').textContent='0.000';
+  $('billStatus').textContent='';
+  capturedPhoto=null;
+  $('photoPreview').style.display='none';
+  $('photoBtn').textContent='📷 Tap to capture bill photo (optional)';
   $('fTab').value = activeTab;
   $('billModal').classList.remove('hidden');
 };
 $('cancelBillBtn').onclick = () => $('billModal').classList.add('hidden');
-
 $('photoBtn').onclick = () => $('photoInput').click();
 $('photoInput').onchange = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const img = new Image();
-  const reader = new FileReader();
+  const file = e.target.files[0]; if (!file) return;
+  const img = new Image(); const reader = new FileReader();
   reader.onload = (ev) => {
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxW = 1000;
-      const scale = Math.min(1, maxW / img.width);
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      const maxW = 1000, scale = Math.min(1, maxW/img.width);
+      canvas.width = img.width*scale; canvas.height = img.height*scale;
+      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg',0.7);
       capturedPhoto = { base64: dataUrl.split(',')[1], previewUrl: dataUrl };
-      $('photoPreview').src = dataUrl;
-      $('photoPreview').style.display = 'block';
-      $('photoBtn').textContent = '📷 Retake photo';
+      $('photoPreview').src = dataUrl; $('photoPreview').style.display='block';
+      $('photoBtn').textContent='📷 Retake photo';
     };
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 };
-
 function recalcTotal(){
-  const amt = parseFloat($('fAmount').value) || 0;
-  const vat = parseFloat($('fVat').value) || 0;
+  const amt = parseFloat($('fAmount').value)||0, vat = parseFloat($('fVat').value)||0;
   $('computedTotal').textContent = (amt+vat).toFixed(3);
 }
 $('fAmount').oninput = recalcTotal;
 $('fVat').oninput = recalcTotal;
 
 $('submitBillBtn').onclick = async () => {
-  const tab = $('fTab').value;
-  const date = $('fDate').value;
-  const amount = parseFloat($('fAmount').value) || 0;
+  const tab = $('fTab').value, date = $('fDate').value;
+  const amount = parseFloat($('fAmount').value)||0;
   const vendor = $('fVendor').value.trim();
   if (!date || !amount){ setStatus('billStatus','Date and amount are required','err'); return; }
-
   const entry = {
-    id: 'e' + Date.now(),
-    tab, date,
-    billNo: $('fBillNo').value.trim(),
-    vendor,
-    amount,
+    id:'e'+Date.now(), tab, date, billNo:$('fBillNo').value.trim(), vendor, amount,
     vat: $('fVat').value ? parseFloat($('fVat').value) : '',
     total: amount + (parseFloat($('fVat').value)||0),
     photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
     thumb: capturedPhoto ? capturedPhoto.previewUrl : null,
-    synced: false,
-    sn: null,
-    createdAt: Date.now()
+    synced:false, sn:null, createdAt:Date.now()
   };
-  entries.push(entry);
-  saveEntries();
-  activeTab = tab;
-  localStorage.setItem(LS_KEYS.activeTab, activeTab);
+  entries.push(entry); saveEntries();
+  activeTab = tab; localStorage.setItem(LS_KEYS.activeTab, activeTab);
   render();
   $('billModal').classList.add('hidden');
   syncPending(false);
 };
 
-// ---- Sync ----
+/* ---------------- SYNC ---------------- */
 async function syncOne(entry){
-  const payload = {
-    tab: entry.tab, date: entry.date, billNo: entry.billNo,
-    vendor: entry.vendor, amount: entry.amount, vat: entry.vat,
-    photoBase64: entry.photoBase64
-  };
-  const res = await fetch(scriptUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight with Apps Script
-    body: JSON.stringify(payload)
-  });
+  const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, photoBase64:entry.photoBase64 };
+  const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Sync failed');
-  entry.synced = true;
-  entry.sn = data.sn;
+  entry.synced = true; entry.sn = data.sn;
   if (data.photoUrl) entry.photoUrl = data.photoUrl;
-  entry.photoBase64 = null; // drop the heavy payload once safely stored in Drive
+  entry.photoBase64 = null;
 }
-
 async function syncPending(manual){
   if (!scriptUrl || !navigator.onLine) return;
   const pending = entries.filter(e => !e.synced);
-  let anySynced = false;
-  for (const entry of pending){
-    try { await syncOne(entry); anySynced = true; }
-    catch(err){ console.warn('Sync failed for entry', entry.id, err); }
-  }
-  if (anySynced){ saveEntries(); render(); }
-  if (manual) setStatus('settingsStatus', anySynced ? 'Synced!' : (pending.length ? 'Still offline or unreachable' : 'Nothing to sync'), anySynced ? 'ok' : '');
+  let any = false;
+  for (const entry of pending){ try { await syncOne(entry); any = true; } catch(err){ console.warn(err); } }
+  if (any){ saveEntries(); render(); renderHistory(); }
+  if (manual) setStatus('settingsStatus', any ? 'Synced!' : (pending.length ? 'Still offline or unreachable' : 'Nothing to sync'), any ? 'ok' : '');
 }
 window.addEventListener('online', () => syncPending(false));
 
-$('activeTab').onchange = (e) => {
-  activeTab = e.target.value;
-  localStorage.setItem(LS_KEYS.activeTab, activeTab);
-  render();
-};
+$('activeTab').onchange = (e) => { activeTab = e.target.value; localStorage.setItem(LS_KEYS.activeTab, activeTab); render(); };
 
-// ---- Init ----
-if ('serviceWorker' in navigator){
-  navigator.serviceWorker.register('service-worker.js').catch(()=>{});
-}
-if (scriptUrl && tabs.length){
-  render();
-} else if (scriptUrl){
-  fetch(scriptUrl + '?action=tabs').then(r=>r.json()).then(d=>{
-    if (d.ok){ tabs = d.tabs; saveTabs(); render(); }
-  }).catch(()=>{ render(); });
-} else {
-  render();
-  openSettings();
-}
+/* ---------------- INIT ---------------- */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+buildPinPad();
+startUnlock();
+if (scriptUrl && tabs.length){ render(); }
+else if (scriptUrl){
+  fetch(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); } }).catch(()=>render());
+} else { render(); switchView('settings'); }
 setInterval(() => syncPending(false), 30000);
 </script>
 </body>
