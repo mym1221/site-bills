@@ -1,5 +1,5 @@
 const CACHE = 'site-bills-v2';
-const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
+const SHELL = ['./', './index.html', './manifest.json', './icon.png', './logo.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
