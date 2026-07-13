@@ -39,6 +39,19 @@
   .total-sub{color:var(--muted);font-size:13px;margin-top:4px;}
   .pending-note{color:var(--amber);font-size:12px;margin-top:6px;}
 
+  .totals-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .totals-cell{}
+  .totals-label{font-size:10.5px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:3px;}
+  .totals-value{font-size:22px;font-weight:600;}
+  .totals-value.accent{color:var(--accent);font-size:26px;}
+
+  .vat-mode-row{display:flex;gap:8px;margin-bottom:8px;}
+  .vat-mode-btn{flex:1;padding:9px;border-radius:9px;border:1px solid #3a4350;background:var(--panel-2);color:var(--muted);font-size:12.5px;font-family:'Inter',sans-serif;font-weight:600;cursor:pointer;}
+  .vat-mode-btn.active{background:var(--accent);color:#1c1200;border-color:var(--accent);}
+  .vat-rate-row{display:flex;align-items:center;gap:8px;margin-top:8px;}
+  .vat-rate-row label{font-size:10px;color:var(--muted);text-transform:uppercase;}
+  .vat-rate-row input{width:70px;}
+
   .add-btn{width:100%;margin-top:16px;padding:16px;border:none;border-radius:14px;background:var(--accent);color:#1c1200;font-family:'Oswald',sans-serif;font-weight:600;font-size:16px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;}
   .add-btn:active{background:var(--accent-dark);}
 
@@ -146,8 +159,24 @@
         <label for="activeTab">Ledger tab</label>
         <select id="activeTab"></select>
       </div>
-      <div class="total-amount mono" id="totalAmount">0.000</div>
-      <div class="total-sub"><span id="entryCount">0</span> bills in this tab</div>
+      <div class="totals-grid">
+        <div class="totals-cell">
+          <div class="totals-label">Total Amount</div>
+          <div class="totals-value mono" id="totalAmount">0.000</div>
+        </div>
+        <div class="totals-cell">
+          <div class="totals-label">Total VAT</div>
+          <div class="totals-value mono" id="totalVat">0.000</div>
+        </div>
+        <div class="totals-cell">
+          <div class="totals-label">Grand Total</div>
+          <div class="totals-value mono accent" id="totalGrand">0.000</div>
+        </div>
+        <div class="totals-cell">
+          <div class="totals-label">Total Bills</div>
+          <div class="totals-value mono" id="entryCount">0</div>
+        </div>
+      </div>
       <div class="pending-note" id="pendingNote" style="display:none;"></div>
     </section>
 
@@ -238,14 +267,24 @@
       <label for="fVendor">Vendor</label>
       <input type="text" id="fVendor" placeholder="e.g. ALKARRAR TRADING">
     </div>
-    <div class="row2">
-      <div class="field">
-        <label for="fAmount">Amount</label>
-        <input type="number" step="0.001" inputmode="decimal" class="mono" id="fAmount" placeholder="0.000">
+    <div class="field">
+      <label for="fNote">Note / Description (optional)</label>
+      <input type="text" id="fNote" placeholder="e.g. cement for generator room repair">
+    </div>
+    <div class="field">
+      <label for="fAmount">Amount</label>
+      <input type="number" step="0.001" inputmode="decimal" class="mono" id="fAmount" placeholder="0.000">
+    </div>
+    <div class="field">
+      <label>VAT</label>
+      <div class="vat-mode-row">
+        <button type="button" class="vat-mode-btn active" id="vatManualBtn">Manual entry</button>
+        <button type="button" class="vat-mode-btn" id="vatAutoBtn">Auto-calculate</button>
       </div>
-      <div class="field">
-        <label for="fVat">VAT</label>
-        <input type="number" step="0.001" inputmode="decimal" class="mono" id="fVat" placeholder="0.000">
+      <input type="number" step="0.001" inputmode="decimal" class="mono" id="fVat" placeholder="0.000">
+      <div class="vat-rate-row" id="vatRateRow" style="display:none;">
+        <label for="fVatRate">Rate %</label>
+        <input type="number" step="0.1" inputmode="decimal" class="mono" id="fVatRate" value="10">
       </div>
     </div>
     <div class="computed-total">
@@ -385,6 +424,11 @@ $('changePinBtn').onclick = () => {
   renderPinDots();
   $('lockScreen').classList.remove('hidden');
 };
+document.addEventListener('keydown', (ev) => {
+  if ($('lockScreen').classList.contains('hidden')) return;
+  if (ev.key >= '0' && ev.key <= '9'){ ev.preventDefault(); pinPress(ev.key); }
+  else if (ev.key === 'Backspace'){ ev.preventDefault(); pinEntry = pinEntry.slice(0,-1); renderPinDots(); }
+});
 
 /* ---------------- NAV ---------------- */
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -438,8 +482,12 @@ function stubHtml(e){
 function render(){
   populateTabSelects();
   const forTab = entries.filter(e => e.tab === activeTab).sort((a,b)=>b.createdAt-a.createdAt);
-  const total = forTab.reduce((s,e)=>s+(parseFloat(e.total)||0),0);
-  $('totalAmount').textContent = total.toFixed(3);
+  const totalAmt = forTab.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const totalVat = forTab.reduce((s,e)=>s+(parseFloat(e.vat)||0),0);
+  const totalGrand = totalAmt + totalVat;
+  $('totalAmount').textContent = totalAmt.toFixed(3);
+  $('totalVat').textContent = totalVat.toFixed(3);
+  $('totalGrand').textContent = totalGrand.toFixed(3);
   $('entryCount').textContent = forTab.length;
 
   const pendingCount = forTab.filter(e=>!e.synced).length;
@@ -488,6 +536,7 @@ function openDetail(id){
     <div class="detail-row"><span>VAT</span><span>${e.vat !== '' && e.vat !== undefined ? parseFloat(e.vat).toFixed(3) : '—'}</span></div>
     <div class="detail-row"><span>Total</span><span>${(parseFloat(e.total)||0).toFixed(3)}</span></div>
     <div class="detail-row"><span>Status</span><span>${e.synced ? 'Synced (S/N #'+e.sn+')' : 'Pending sync'}</span></div>
+    ${e.note ? `<div class="detail-row"><span>Note</span><span style="text-align:right;max-width:70%;font-family:'Inter',sans-serif;">${escapeHtml(e.note)}</span></div>` : ''}
     ${e.photoUrl ? `<div class="detail-row"><span>Photo</span><span><a href="${e.photoUrl}" target="_blank" style="color:var(--accent);">Open in Drive</a></span></div>` : ''}
   `;
   $('detailStatus').textContent = '';
@@ -560,13 +609,14 @@ $('createTabBtn').onclick = async () => {
 $('addBillBtn').onclick = () => {
   if (!scriptUrl){ switchView('settings'); return; }
   $('fDate').value = new Date().toISOString().slice(0,10);
-  $('fBillNo').value=''; $('fVendor').value=''; $('fAmount').value=''; $('fVat').value='';
+  $('fBillNo').value=''; $('fVendor').value=''; $('fAmount').value=''; $('fVat').value=''; $('fNote').value='';
   $('computedTotal').textContent='0.000';
   $('billStatus').textContent='';
   capturedPhoto=null;
   $('photoPreview').style.display='none';
   $('photoBtn').textContent='📷 Tap to capture bill photo (optional)';
   $('fTab').value = activeTab;
+  setVatMode('manual');
   $('billModal').classList.remove('hidden');
 };
 $('cancelBillBtn').onclick = () => $('billModal').classList.add('hidden');
@@ -589,8 +639,26 @@ $('photoInput').onchange = (e) => {
   };
   reader.readAsDataURL(file);
 };
+let vatMode = 'manual';
+function setVatMode(mode){
+  vatMode = mode;
+  $('vatManualBtn').classList.toggle('active', mode==='manual');
+  $('vatAutoBtn').classList.toggle('active', mode==='auto');
+  $('fVat').readOnly = (mode === 'auto');
+  $('vatRateRow').style.display = (mode === 'auto') ? 'flex' : 'none';
+  recalcTotal();
+}
+$('vatManualBtn').onclick = () => setVatMode('manual');
+$('vatAutoBtn').onclick = () => setVatMode('auto');
+$('fVatRate').oninput = recalcTotal;
 function recalcTotal(){
-  const amt = parseFloat($('fAmount').value)||0, vat = parseFloat($('fVat').value)||0;
+  const amt = parseFloat($('fAmount').value)||0;
+  if (vatMode === 'auto'){
+    const rate = parseFloat($('fVatRate').value)||0;
+    const vat = amt * rate / 100;
+    $('fVat').value = amt ? vat.toFixed(3) : '';
+  }
+  const vat = parseFloat($('fVat').value)||0;
   $('computedTotal').textContent = (amt+vat).toFixed(3);
 }
 $('fAmount').oninput = recalcTotal;
@@ -605,6 +673,7 @@ $('submitBillBtn').onclick = async () => {
     id:'e'+Date.now(), tab, date, billNo:$('fBillNo').value.trim(), vendor, amount,
     vat: $('fVat').value ? parseFloat($('fVat').value) : '',
     total: amount + (parseFloat($('fVat').value)||0),
+    note: $('fNote').value.trim(),
     photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
     thumb: capturedPhoto ? capturedPhoto.previewUrl : null,
     synced:false, sn:null, createdAt:Date.now()
@@ -618,7 +687,7 @@ $('submitBillBtn').onclick = async () => {
 
 /* ---------------- SYNC ---------------- */
 async function syncOne(entry){
-  const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, photoBase64:entry.photoBase64 };
+  const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, note:entry.note, photoBase64:entry.photoBase64 };
   const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Sync failed');
