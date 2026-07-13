@@ -617,6 +617,10 @@ $('addBillBtn').onclick = () => {
   $('photoBtn').textContent='📷 Tap to capture bill photo (optional)';
   $('fTab').value = activeTab;
   setVatMode('manual');
+  skipDuplicateCheck = false;
+  isSubmitting = false;
+  $('submitBillBtn').disabled = false;
+  $('submitBillBtn').textContent = 'Save Bill';
   $('billModal').classList.remove('hidden');
 };
 $('cancelBillBtn').onclick = () => $('billModal').classList.add('hidden');
@@ -664,13 +668,42 @@ function recalcTotal(){
 $('fAmount').oninput = recalcTotal;
 $('fVat').oninput = recalcTotal;
 
+let isSubmitting = false;
+let skipDuplicateCheck = false;
+
 $('submitBillBtn').onclick = async () => {
+  if (isSubmitting) return;
   const tab = $('fTab').value, date = $('fDate').value;
   const amount = parseFloat($('fAmount').value)||0;
-  const vendor = $('fVendor').value.trim();
+  const billNo = $('fBillNo').value.trim();
   if (!date || !amount){ setStatus('billStatus','Date and amount are required','err'); return; }
+
+  isSubmitting = true;
+  $('submitBillBtn').disabled = true;
+
+  if (billNo && !skipDuplicateCheck && scriptUrl && navigator.onLine){
+    $('submitBillBtn').textContent = 'Checking…';
+    setStatus('billStatus','Checking for duplicate bill number…','');
+    try {
+      const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'checkDuplicate', tab, billNo }) });
+      const data = await res.json();
+      if (data.ok && data.duplicate){
+        setStatus('billStatus', `Bill No ${billNo} already exists in ${tab} (S/N #${data.sn}, ${escapeHtml(data.vendor||'')}). Tap Save Anyway if this is correct.`, 'err');
+        $('submitBillBtn').textContent = 'Save Anyway';
+        $('submitBillBtn').disabled = false;
+        skipDuplicateCheck = true;
+        isSubmitting = false;
+        return;
+      }
+    } catch(err){ /* couldn't verify — proceed rather than block on a network hiccup */ }
+  }
+
+  $('submitBillBtn').textContent = 'Saving…';
+  setStatus('billStatus','','');
+
+  const vendor = $('fVendor').value.trim();
   const entry = {
-    id:'e'+Date.now(), tab, date, billNo:$('fBillNo').value.trim(), vendor, amount,
+    id:'e'+Date.now(), tab, date, billNo, vendor, amount,
     vat: $('fVat').value ? parseFloat($('fVat').value) : '',
     total: amount + (parseFloat($('fVat').value)||0),
     note: $('fNote').value.trim(),
@@ -683,6 +716,11 @@ $('submitBillBtn').onclick = async () => {
   render();
   $('billModal').classList.add('hidden');
   syncPending(false);
+
+  skipDuplicateCheck = false;
+  $('submitBillBtn').textContent = 'Save Bill';
+  $('submitBillBtn').disabled = false;
+  isSubmitting = false;
 };
 
 /* ---------------- SYNC ---------------- */
@@ -695,13 +733,23 @@ async function syncOne(entry){
   if (data.photoUrl) entry.photoUrl = data.photoUrl;
   entry.photoBase64 = null;
 }
+let syncing = false;
 async function syncPending(manual){
   if (!scriptUrl || !navigator.onLine) return;
-  const pending = entries.filter(e => !e.synced);
-  let any = false;
-  for (const entry of pending){ try { await syncOne(entry); any = true; } catch(err){ console.warn(err); } }
-  if (any){ saveEntries(); render(); renderHistory(); }
-  if (manual) setStatus('settingsStatus', any ? 'Synced!' : (pending.length ? 'Still offline or unreachable' : 'Nothing to sync'), any ? 'ok' : '');
+  if (syncing){ if (manual) setStatus('settingsStatus','Sync already in progress…',''); return; }
+  syncing = true;
+  try {
+    const pending = entries.filter(e => !e.synced);
+    let any = false;
+    for (const entry of pending){
+      try { await syncOne(entry); any = true; saveEntries(); }
+      catch(err){ console.warn('Sync failed for entry', entry.id, err); }
+    }
+    if (any){ render(); renderHistory(); }
+    if (manual) setStatus('settingsStatus', any ? 'Synced!' : (pending.length ? 'Still offline or unreachable' : 'Nothing to sync'), any ? 'ok' : '');
+  } finally {
+    syncing = false;
+  }
 }
 window.addEventListener('online', () => syncPending(false));
 
