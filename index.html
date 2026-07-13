@@ -439,7 +439,11 @@ function switchView(name){
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   $('view-' + name).classList.add('active');
   document.querySelector(`.nav-btn[data-view="${name}"]`).classList.add('active');
-  if (name === 'history') renderHistory();
+  if (name === 'history'){
+    renderHistory();
+    const filt = $('historyTabFilter').value;
+    if (filt && filt !== '__all') reconcileTab(filt);
+  }
 }
 $('settingsShortcut').onclick = () => switchView('settings');
 
@@ -555,7 +559,11 @@ $('deleteDetailBtn').onclick = async () => {
         body: JSON.stringify({ action:'delete', tab:e.tab, sn:e.sn })
       });
       const data = await res.json();
-      if (!data.ok){ setStatus('detailStatus', data.error || 'Delete failed', 'err'); return; }
+      if (!data.ok){
+        const alreadyGone = /not found/i.test(data.error || '');
+        if (!alreadyGone){ setStatus('detailStatus', data.error || 'Delete failed', 'err'); return; }
+        // Row was already removed directly in the Sheet — fall through and clean up locally too.
+      }
     } catch(err){ setStatus('detailStatus','Could not reach sheet — check connection','err'); return; }
   }
   entries = entries.filter(x => x.id !== e.id);
@@ -769,6 +777,25 @@ $('submitBillBtn').onclick = async () => {
 };
 
 /* ---------------- SYNC ---------------- */
+/* ---------------- RECONCILE (detect rows deleted directly in the Sheet) ---------------- */
+async function reconcileTab(tab){
+  if (!scriptUrl || !tab || !navigator.onLine) return;
+  try {
+    const res = await fetch(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'listSN', tab })
+    });
+    const data = await res.json();
+    if (!data.ok || !Array.isArray(data.sns)) return;
+    const stillThere = new Set(data.sns);
+    const before = entries.length;
+    entries = entries.filter(e => !(e.tab === tab && e.synced && !stillThere.has(e.sn)));
+    if (entries.length !== before){
+      saveEntries(); render(); renderHistory();
+    }
+  } catch(err){ /* skip silently — non-critical background check */ }
+}
+
 async function syncOne(entry){
   const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, note:entry.note, photoBase64:entry.photoBase64 };
   const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) });
@@ -798,17 +825,17 @@ async function syncPending(manual){
 }
 window.addEventListener('online', () => syncPending(false));
 
-$('activeTab').onchange = (e) => { activeTab = e.target.value; localStorage.setItem(LS_KEYS.activeTab, activeTab); render(); };
+$('activeTab').onchange = (e) => { activeTab = e.target.value; localStorage.setItem(LS_KEYS.activeTab, activeTab); render(); reconcileTab(activeTab); };
 
 /* ---------------- INIT ---------------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(()=>{});
 buildPinPad();
 startUnlock();
-if (scriptUrl && tabs.length){ render(); }
+if (scriptUrl && tabs.length){ render(); reconcileTab(activeTab); }
 else if (scriptUrl){
-  fetch(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); } }).catch(()=>render());
+  fetch(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); reconcileTab(activeTab); } }).catch(()=>render());
 } else { render(); switchView('settings'); }
-setInterval(() => syncPending(false), 30000);
+setInterval(() => { syncPending(false); reconcileTab(activeTab); }, 30000);
 </script>
 </body>
 </html>
