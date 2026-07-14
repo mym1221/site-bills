@@ -678,7 +678,6 @@ $('createTabBtn').onclick = async () => {
 /* ---------------- ADD BILL ---------------- */
 $('addBillBtn').onclick = () => {
   if (!scriptUrl){ switchView('settings'); return; }
-  $('fDate').value = new Date().toISOString().slice(0,10);
   $('fBillNo').value=''; $('fVendor').value=''; $('fAmount').value=''; $('fVat').value=''; $('fNote').value='';
   $('computedTotal').textContent='0.000';
   $('billStatus').textContent='';
@@ -686,6 +685,7 @@ $('addBillBtn').onclick = () => {
   $('photoPreview').style.display='none';
   $('photoBtn').textContent='📷 Tap to capture bill photo (optional)';
   $('fTab').value = activeTab;
+  $('fDate').value = suggestDateForTab(activeTab);
   setVatMode('manual');
   skipDuplicateCheck = false;
   isSubmitting = false;
@@ -693,6 +693,7 @@ $('addBillBtn').onclick = () => {
   $('submitBillBtn').textContent = 'Save Bill';
   $('billModal').classList.remove('hidden');
 };
+$('fTab').onchange = () => { $('fDate').value = suggestDateForTab($('fTab').value); };
 $('cancelBillBtn').onclick = () => $('billModal').classList.add('hidden');
 $('photoBtn').onclick = () => $('photoInput').click();
 $('photoInput').onchange = (e) => {
@@ -753,6 +754,18 @@ function parseTabMonthYear(tabName){
   }
   if (monthIdx === -1) return null;
   return { month: monthIdx+1, year: parseInt(yearMatch[0]), label: MONTH_NAMES[monthIdx] };
+}
+
+function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
+function suggestDateForTab(tabName){
+  const today = new Date();
+  const info = parseTabMonthYear(tabName);
+  if (!info) return today.toISOString().slice(0,10);
+  if (today.getFullYear() === info.year && today.getMonth()+1 === info.month){
+    return today.toISOString().slice(0,10); // already that month — today is fine
+  }
+  const day = Math.min(today.getDate(), daysInMonth(info.year, info.month));
+  return `${info.year}-${String(info.month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
 }
 
 let isSubmitting = false;
