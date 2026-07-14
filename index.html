@@ -62,6 +62,9 @@
   .section-label{margin:26px 0 10px;font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;}
   .link-btn{background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;font-weight:600;text-transform:none;letter-spacing:0;}
 
+  .search-wrap{position:relative;margin-bottom:12px;}
+  .search-wrap .search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:14px;opacity:.55;pointer-events:none;}
+  .search-wrap .search-box{padding-left:38px;margin-bottom:0;}
   .search-box{width:100%;background:var(--panel);border:1px solid #3a4350;color:#eef1f4;border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:14px;}
   .search-box::placeholder{color:var(--muted-2);}
 
@@ -216,10 +219,14 @@
   <!-- HISTORY -->
   <div class="view" id="view-history">
     <header><h2>History</h2></header>
-    <input class="search-box" id="searchBox" placeholder="Search vendor or bill no...">
-    <select id="historyTabFilter" style="width:100%;margin-bottom:14px;">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input class="search-box" id="searchBox" placeholder="Search vendor or bill no... (updates as you type)">
+    </div>
+    <select id="historyTabFilter" style="width:100%;margin-bottom:6px;">
       <option value="__all">All tabs</option>
     </select>
+    <div class="status-msg" id="historyStatus" style="text-align:left;margin-bottom:8px;"></div>
     <div class="entry-list" id="historyEntryList"></div>
   </div>
 
@@ -479,16 +486,15 @@ document.addEventListener('keydown', (ev) => {
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.onclick = () => switchView(btn.dataset.view);
 });
+let remoteHistoryEntries = [];
+let remoteFetchedTabs = new Set();
+
 function switchView(name){
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   $('view-' + name).classList.add('active');
   document.querySelector(`.nav-btn[data-view="${name}"]`).classList.add('active');
-  if (name === 'history'){
-    renderHistory();
-    const filt = $('historyTabFilter').value;
-    if (filt && filt !== '__all') reconcileTab(filt);
-  }
+  if (name === 'history') loadHistoryData();
   if (name === 'reports'){
     $('reportTabSelect').innerHTML = tabs.map(t => `<option value="${t}">${t}</option>`).join('');
     if (activeTab) $('reportTabSelect').value = activeTab;
@@ -553,18 +559,74 @@ function render(){
   attachStubHandlers($('homeEntryList'));
 }
 
+/* Pulls real bill data from the Sheet for search/history — not just what this device added locally */
+async function loadHistoryData(){
+  const filt = $('historyTabFilter').value || '__all';
+  const tabsToFetch = filt === '__all' ? tabs : [filt];
+
+  if (!scriptUrl || !navigator.onLine){
+    setStatus('historyStatus', scriptUrl ? 'Offline — showing bills saved on this device only' : '', '');
+    renderHistory();
+    return;
+  }
+
+  setStatus('historyStatus','Loading bills from your sheet…','');
+  const collected = [];
+  for (const t of tabsToFetch){
+    try {
+      const res = await fetch(scriptUrl, {
+        method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({ action:'getReportData', tab:t })
+      });
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.rows)){
+        data.rows.forEach(r => collected.push({
+          id: 'r_' + t + '_' + r.sn,
+          tab: t, date: r.date,
+          billNo: String(r.billNo||''), vendor: r.vendor||'', note: r.note||'',
+          amount: r.amount, vat: r.vat, total: r.total,
+          synced: true, sn: r.sn, photoUrl: r.photoUrl || '',
+          createdAt: 0
+        }));
+        remoteFetchedTabs.add(t);
+      }
+    } catch(err){ /* skip this tab, fall back to local cache for it */ }
+  }
+  remoteHistoryEntries = collected;
+  setStatus('historyStatus','','');
+  renderHistory();
+}
+
+function getMergedHistoryList(){
+  // For any tab we successfully fetched, the Sheet is ground truth — use it
+  // and drop local synced copies (so deletions/edits made in the Sheet show correctly).
+  // Bills still pending sync (added offline, not yet pushed) always show regardless.
+  const localExtra = entries.filter(e => !e.synced || !remoteFetchedTabs.has(e.tab));
+  return [...remoteHistoryEntries, ...localExtra];
+}
+
 function renderHistory(){
   const q = $('searchBox').value.trim().toLowerCase();
   const tabFilter = $('historyTabFilter').value;
-  let list = entries.slice().sort((a,b)=>b.createdAt-a.createdAt);
+  let list = getMergedHistoryList();
   if (tabFilter !== '__all') list = list.filter(e => e.tab === tabFilter);
-  if (q) list = list.filter(e => (e.vendor||'').toLowerCase().includes(q) || (e.billNo||'').toLowerCase().includes(q));
+  if (q) list = list.filter(e =>
+    (e.vendor||'').toLowerCase().includes(q) ||
+    String(e.billNo||'').toLowerCase().includes(q) ||
+    (e.note||'').toLowerCase().includes(q)
+  );
+  list.sort((a,b) => {
+    const ak = (a.sn === null || a.sn === undefined) ? Infinity : a.sn;
+    const bk = (b.sn === null || b.sn === undefined) ? Infinity : b.sn;
+    if (ak !== bk) return bk - ak;
+    return (b.createdAt||0) - (a.createdAt||0);
+  });
   $('historyEntryList').innerHTML = list.length ? list.map(stubHtml).join('') :
     '<div class="empty">No bills match.</div>';
   attachStubHandlers($('historyEntryList'));
 }
-$('searchBox').oninput = renderHistory;
-$('historyTabFilter').onchange = renderHistory;
+$('searchBox').oninput = renderHistory; // filters the already-loaded list live, no button needed
+$('historyTabFilter').onchange = () => loadHistoryData();
 
 function attachStubHandlers(container){
   container.querySelectorAll('.stub').forEach(el => {
@@ -574,11 +636,10 @@ function attachStubHandlers(container){
 
 /* ---------------- DETAIL MODAL ---------------- */
 function openDetail(id){
-  const e = entries.find(x => x.id === id);
+  const e = entries.find(x => x.id === id) || remoteHistoryEntries.find(x => x.id === id);
   if (!e) return;
   currentDetailEntry = e;
-  const photoSrc = e.photoUrl || e.thumb;
-  if (photoSrc){ $('detailPhoto').src = e.thumb || e.photoUrl; $('detailPhoto').style.display='block'; }
+  if (e.thumb){ $('detailPhoto').src = e.thumb; $('detailPhoto').style.display='block'; }
   else { $('detailPhoto').style.display='none'; }
   $('detailFields').innerHTML = `
     <div class="detail-row"><span>Tab</span><span>${escapeHtml(e.tab)}</span></div>
@@ -616,6 +677,7 @@ $('deleteDetailBtn').onclick = async () => {
     } catch(err){ setStatus('detailStatus','Could not reach sheet — check connection','err'); return; }
   }
   entries = entries.filter(x => x.id !== e.id);
+  remoteHistoryEntries = remoteHistoryEntries.filter(x => x.id !== e.id);
   saveEntries();
   $('detailModal').classList.add('hidden');
   render(); renderHistory();
