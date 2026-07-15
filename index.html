@@ -52,9 +52,7 @@
   .vat-label-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
   .vat-toggle-chip{padding:3px 9px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:9.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;}
   .vat-toggle-chip.manual{border-color:#3a4350;color:var(--muted);}
-  .vat-rate-row{display:flex;align-items:center;gap:8px;margin:-2px 0 9px;}
-  .vat-rate-row label{font-size:10px;color:var(--muted);text-transform:uppercase;}
-  .vat-rate-row input{width:70px;}
+
 
   .add-btn{width:100%;margin-top:16px;padding:16px;border:none;border-radius:14px;background:var(--accent);color:#1c1200;font-family:'Oswald',sans-serif;font-weight:600;font-size:16px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;}
   .add-btn:active{background:var(--accent-dark);}
@@ -104,9 +102,11 @@
   .photo-btn{width:100%;border:1.5px dashed #4a5563;background:var(--panel-2);color:var(--muted);border-radius:10px;padding:10px 12px;text-align:center;font-size:12.5px;cursor:pointer;margin-bottom:9px;}
   .photo-preview{width:100%;border-radius:10px;margin-bottom:9px;display:none;max-height:130px;object-fit:cover;}
 
-  .computed-total{background:var(--panel-2);border-radius:10px;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-  .computed-total span:first-child{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
-  .computed-total span:last-child{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;color:var(--accent);}
+  .computed-total{background:var(--panel-2);border-radius:10px;padding:9px 14px;margin-bottom:10px;}
+  .computed-breakdown{font-size:11px;color:var(--muted);margin-bottom:4px;font-family:'IBM Plex Mono',monospace;}
+  .computed-total-row{display:flex;justify-content:space-between;align-items:center;}
+  .computed-total-row span:first-child{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+  .computed-total-row span:last-child{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;color:var(--accent);}
 
   .btn-row{display:flex;gap:10px;margin-top:4px;}
   .btn{flex:1;padding:13px;border-radius:12px;border:none;font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;}
@@ -129,16 +129,25 @@
 
   /* Report */
   #reportContent{background:#ffffff;color:#1c2128;border-radius:10px;padding:20px;font-family:'Inter',sans-serif;}
+  .report-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .report-table{width:100%;min-width:640px;border-collapse:collapse;font-size:11px;table-layout:fixed;}
+  .report-table th, .report-table td{border:1px solid #d8cfc0;padding:6px 6px;text-align:left;word-wrap:break-word;overflow-wrap:break-word;}
+  .report-table th{background:#f4efe6;font-family:'Inter',sans-serif;font-weight:600;text-transform:uppercase;font-size:9px;letter-spacing:.03em;}
+  .report-table td.num, .report-table th.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .report-table th:nth-child(1), .report-table td:nth-child(1){width:4%;}
+  .report-table th:nth-child(2), .report-table td:nth-child(2){width:9%;}
+  .report-table th:nth-child(3), .report-table td:nth-child(3){width:12%;}
+  .report-table th:nth-child(4), .report-table td:nth-child(4){width:15%;}
+  .report-table th:nth-child(5), .report-table td:nth-child(5){width:17%;}
+  .report-table th:nth-child(6), .report-table td:nth-child(6){width:13%;}
+  .report-table th:nth-child(7), .report-table td:nth-child(7){width:12%;}
+  .report-table th:nth-child(8), .report-table td:nth-child(8){width:18%;}
   .report-header{display:flex;align-items:center;gap:14px;border-bottom:2px solid #1c2128;padding-bottom:14px;margin-bottom:14px;}
   .report-header img{height:52px;width:auto;}
   .report-company-name{font-family:'Oswald',sans-serif;font-weight:700;font-size:20px;letter-spacing:.03em;}
   .report-company-full{font-size:11.5px;color:#5b6774;}
   .report-title{font-family:'Oswald',sans-serif;font-weight:600;font-size:16px;margin-bottom:2px;}
   .report-meta{font-size:11px;color:#5b6774;margin-bottom:14px;}
-  .report-table{width:100%;border-collapse:collapse;font-size:11.5px;}
-  .report-table th, .report-table td{border:1px solid #d8cfc0;padding:6px 7px;text-align:left;}
-  .report-table th{background:#f4efe6;font-family:'Inter',sans-serif;font-weight:600;text-transform:uppercase;font-size:9.5px;letter-spacing:.04em;}
-  .report-table td.num, .report-table th.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
   .report-totals{margin-top:16px;margin-left:auto;width:260px;}
   .report-totals div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e0d5;font-size:13px;}
   .report-totals div.grand{font-weight:700;font-size:15px;border-bottom:none;border-top:2px solid #1c2128;margin-top:4px;padding-top:8px;}
@@ -152,16 +161,9 @@
     #view-reports > *:not(#reportPreviewWrap){display:none !important;}
     #reportPreviewWrap{display:block !important;margin:0;}
     #reportContent{border-radius:0;padding:0;width:100%;}
-    .report-table{table-layout:fixed;font-size:9px;}
-    .report-table th, .report-table td{padding:4px 5px;word-wrap:break-word;overflow-wrap:break-word;}
-    .report-table th:nth-child(1), .report-table td:nth-child(1){width:4%;}
-    .report-table th:nth-child(2), .report-table td:nth-child(2){width:9%;}
-    .report-table th:nth-child(3), .report-table td:nth-child(3){width:12%;}
-    .report-table th:nth-child(4), .report-table td:nth-child(4){width:15%;}
-    .report-table th:nth-child(5), .report-table td:nth-child(5){width:17%;}
-    .report-table th:nth-child(6), .report-table td:nth-child(6){width:13%;}
-    .report-table th:nth-child(7), .report-table td:nth-child(7){width:12%;}
-    .report-table th:nth-child(8), .report-table td:nth-child(8){width:18%;}
+    .report-table-wrap{overflow:visible;}
+    .report-table{min-width:0;font-size:9px;}
+    .report-table th, .report-table td{padding:4px 5px;}
     .report-table tr{page-break-inside:avoid;}
   }
 
@@ -283,8 +285,15 @@
     </div>
 
     <div class="settings-block">
+      <h3>Fix date formatting</h3>
+      <p class="help-text">Protects the Date column on every existing tab so Google Sheets can never silently swap day/month (e.g. 11/06 becoming 06/11). One tap covers all tabs — no need to do this by hand in Sheets.</p>
+      <button class="btn btn-ghost" style="width:100%;" id="fixDatesBtn">Protect Date Columns (all tabs)</button>
+      <div class="status-msg" id="fixDatesStatus"></div>
+    </div>
+
+    <div class="settings-block">
       <h3>Add a new month tab</h3>
-      <p class="help-text">Creates a fresh tab in your Sheet with the right headers, ready for a new month.</p>
+      <p class="help-text">Creates a fresh tab in your Sheet with the right headers, ready for a new month. Its Date column is protected automatically.</p>
       <div class="field">
         <input type="text" id="newTabName" placeholder="e.g. APRIL-2026">
       </div>
@@ -311,7 +320,7 @@
 <!-- Add Bill Modal -->
 <div class="modal hidden" id="billModal">
   <div class="sheet">
-    <h2>Add Bill</h2>
+    <h2 id="billModalTitle">Add Bill</h2>
     <button class="photo-btn" id="photoBtn">📷 Tap to capture bill photo (optional)</button>
     <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none;">
     <img id="photoPreview" class="photo-preview">
@@ -340,7 +349,7 @@
     </div>
     <div class="row2">
       <div class="field">
-        <label for="fAmount">Amount</label>
+        <label for="fAmount" id="fAmountLabel">Amount</label>
         <input type="number" step="0.001" inputmode="decimal" class="mono" id="fAmount" placeholder="0.000">
       </div>
       <div class="field">
@@ -351,13 +360,12 @@
         <input type="number" step="0.001" inputmode="decimal" class="mono" id="fVat" placeholder="0.000">
       </div>
     </div>
-    <div class="vat-rate-row" id="vatRateRow" style="display:none;">
-      <label for="fVatRate">Rate %</label>
-      <input type="number" step="0.1" inputmode="decimal" class="mono" id="fVatRate" value="10">
-    </div>
     <div class="computed-total">
-      <span>Total</span>
-      <span id="computedTotal">0.000</span>
+      <div class="computed-breakdown" id="computedBreakdown">Amount 0.000 · VAT 0.000</div>
+      <div class="computed-total-row">
+        <span>Total</span>
+        <span id="computedTotal">0.000</span>
+      </div>
     </div>
     <div class="btn-row">
       <button class="btn btn-ghost" id="cancelBillBtn">Cancel</button>
@@ -375,7 +383,10 @@
     <div id="detailFields"></div>
     <div class="btn-row" style="margin-top:16px;">
       <button class="btn btn-ghost" id="closeDetailBtn">Close</button>
-      <button class="btn btn-danger" id="deleteDetailBtn">Delete Bill</button>
+      <button class="btn btn-primary" id="editDetailBtn">Edit Bill</button>
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn btn-danger" id="deleteDetailBtn" style="flex:1;">Delete Bill</button>
     </div>
     <div class="status-msg" id="detailStatus"></div>
   </div>
@@ -402,6 +413,8 @@ let entries = JSON.parse(localStorage.getItem(LS_KEYS.entries) || '[]');
 let activeTab = localStorage.getItem(LS_KEYS.activeTab) || '';
 let capturedPhoto = null;
 let currentDetailEntry = null;
+let editingEntry = null;
+let editingExistingPhotoUrl = '';
 let pinEntry = '';
 let pinMode = 'unlock'; // 'unlock' | 'setup-first' | 'setup-change'
 let firstPinTemp = '';
@@ -707,6 +720,25 @@ $('saveSettingsBtn').onclick = async () => {
 
 $('syncNowBtn').onclick = () => syncPending(true);
 
+$('fixDatesBtn').onclick = async () => {
+  if (!scriptUrl){ setStatus('fixDatesStatus','Connect to your sheet first','err'); return; }
+  setStatus('fixDatesStatus','Protecting all tabs…','');
+  $('fixDatesBtn').disabled = true;
+  try {
+    const res = await fetch(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'fixDateColumns' })
+    });
+    const data = await res.json();
+    if (data.ok){
+      setStatus('fixDatesStatus', 'Protected ' + (data.fixedTabs||[]).length + ' tab(s): ' + (data.fixedTabs||[]).join(', '), 'ok');
+    } else {
+      setStatus('fixDatesStatus', data.error || 'Failed', 'err');
+    }
+  } catch(err){ setStatus('fixDatesStatus','Could not reach your sheet','err'); }
+  $('fixDatesBtn').disabled = false;
+};
+
 $('createTabBtn').onclick = async () => {
   let name = $('newTabName').value.trim();
   if (!name){ setStatus('tabStatus','Enter a tab name first','err'); return; }
@@ -740,12 +772,53 @@ $('createTabBtn').onclick = async () => {
 };
 
 /* ---------------- ADD BILL ---------------- */
+function ddmmyyyyToIso(str){
+  const parts = String(str).split('/');
+  if (parts.length !== 3) return new Date().toISOString().slice(0,10);
+  const [d,m,y] = parts;
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function openEditForBill(entry){
+  editingEntry = entry;
+  $('billModalTitle').textContent = 'Edit Bill';
+  $('submitBillBtn').textContent = 'Save Changes';
+  $('fTab').value = entry.tab;
+  $('fDate').value = ddmmyyyyToIso(entry.date);
+  $('fBillNo').value = entry.billNo || '';
+  $('fVendor').value = entry.vendor || '';
+  $('fNote').value = entry.note || '';
+  $('fAmount').value = entry.amount || '';
+  $('fVat').value = entry.vat !== '' && entry.vat !== undefined ? entry.vat : '';
+  setVatMode('manual'); // edits always show the actual stored amount/VAT, editable directly
+  capturedPhoto = null;
+  editingExistingPhotoUrl = entry.photoUrl || '';
+  if (entry.thumb){ $('photoPreview').src = entry.thumb; $('photoPreview').style.display='block'; }
+  else { $('photoPreview').style.display='none'; }
+  $('photoBtn').textContent = entry.photoUrl ? '📷 Replace photo (optional)' : '📷 Tap to capture bill photo (optional)';
+  $('billStatus').textContent = entry.photoUrl && !entry.thumb ? 'This bill already has a photo attached — leave as is, or tap above to replace it.' : '';
+  skipDuplicateCheck = true; // editing the same bill shouldn't trigger its own duplicate-number check
+  isSubmitting = false;
+  $('submitBillBtn').disabled = false;
+  $('billModal').classList.remove('hidden');
+}
+
+$('editDetailBtn').onclick = () => {
+  if (!currentDetailEntry) return;
+  $('detailModal').classList.add('hidden');
+  openEditForBill(currentDetailEntry);
+};
+
 $('addBillBtn').onclick = () => {
   if (!scriptUrl){ switchView('settings'); return; }
+  editingEntry = null;
+  $('billModalTitle').textContent = 'Add Bill';
   $('fBillNo').value=''; $('fVendor').value=''; $('fAmount').value=''; $('fVat').value=''; $('fNote').value='';
   $('computedTotal').textContent='0.000';
+  $('computedBreakdown').textContent='Amount 0.000 · VAT 0.000';
   $('billStatus').textContent='';
   capturedPhoto=null;
+  editingExistingPhotoUrl = '';
   $('photoPreview').style.display='none';
   $('photoBtn').textContent='📷 Tap to capture bill photo (optional)';
   $('fTab').value = activeTab;
@@ -778,27 +851,49 @@ $('photoInput').onchange = (e) => {
   };
   reader.readAsDataURL(file);
 };
+const VAT_RATE = 10; // locked — Bahrain standard VAT rate
 let vatMode = 'manual';
+const VAT_MODE_LABELS = { manual: 'Manual', auto: 'Auto 10%', reverse: 'From Total' };
+const VAT_MODE_ORDER = ['manual', 'auto', 'reverse'];
+
 function setVatMode(mode){
   vatMode = mode;
   const chip = $('vatModeToggle');
-  chip.textContent = mode === 'auto' ? 'Auto 10%' : 'Manual';
+  chip.textContent = VAT_MODE_LABELS[mode];
   chip.classList.toggle('manual', mode === 'manual');
-  $('fVat').readOnly = (mode === 'auto');
-  $('vatRateRow').style.display = (mode === 'auto') ? 'flex' : 'none';
+  $('fVat').readOnly = (mode !== 'manual');
+  $('fAmountLabel').textContent = (mode === 'reverse') ? 'Total (as printed on bill)' : 'Amount';
   recalcTotal();
 }
-$('vatModeToggle').onclick = () => setVatMode(vatMode === 'manual' ? 'auto' : 'manual');
-$('fVatRate').oninput = recalcTotal;
-function recalcTotal(){
-  const amt = parseFloat($('fAmount').value)||0;
-  if (vatMode === 'auto'){
-    const rate = parseFloat($('fVatRate').value)||0;
-    const vat = amt * rate / 100;
-    $('fVat').value = amt ? vat.toFixed(3) : '';
+$('vatModeToggle').onclick = () => {
+  const next = VAT_MODE_ORDER[(VAT_MODE_ORDER.indexOf(vatMode) + 1) % VAT_MODE_ORDER.length];
+  setVatMode(next);
+};
+
+// Returns the real {amount, vat, total} to store, regardless of which mode was used to get there
+function getBillBreakdown(){
+  const raw = parseFloat($('fAmount').value) || 0;
+  if (vatMode === 'reverse'){
+    const total = raw;
+    const amount = total / (1 + VAT_RATE/100);
+    const vat = total - amount;
+    return { amount, vat, total };
   }
-  const vat = parseFloat($('fVat').value)||0;
-  $('computedTotal').textContent = (amt+vat).toFixed(3);
+  if (vatMode === 'auto'){
+    const amount = raw;
+    const vat = amount * VAT_RATE / 100;
+    return { amount, vat, total: amount + vat };
+  }
+  const amount = raw;
+  const vat = parseFloat($('fVat').value) || 0;
+  return { amount, vat, total: amount + vat };
+}
+
+function recalcTotal(){
+  const b = getBillBreakdown();
+  if (vatMode !== 'manual') $('fVat').value = (parseFloat($('fAmount').value)||0) ? b.vat.toFixed(3) : '';
+  $('computedBreakdown').textContent = `Amount ${b.amount.toFixed(3)} · VAT ${b.vat.toFixed(3)}`;
+  $('computedTotal').textContent = b.total.toFixed(3);
 }
 $('fAmount').oninput = recalcTotal;
 $('fVat').oninput = recalcTotal;
@@ -857,6 +952,73 @@ $('submitBillBtn').onclick = async () => {
     }
   }
 
+  if (editingEntry){
+    isSubmitting = true;
+    $('submitBillBtn').disabled = true;
+    $('submitBillBtn').textContent = 'Saving…';
+    setStatus('billStatus','','');
+
+    const vendor = $('fVendor').value.trim();
+    const noteVal = $('fNote').value.trim();
+    const breakdown = getBillBreakdown();
+
+    if (editingEntry.synced){
+      if (!scriptUrl || !navigator.onLine){
+        setStatus('billStatus','You need to be online to save changes to a synced bill.','err');
+        isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Changes';
+        return;
+      }
+      try {
+        const payload = {
+          action:'update', tab: editingEntry.tab, sn: editingEntry.sn,
+          date, billNo, vendor, amount: breakdown.amount, vat: breakdown.vat,
+          note: noteVal, photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
+          existingPhotoUrl: editingExistingPhotoUrl
+        };
+        const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!data.ok){
+          setStatus('billStatus', data.error || 'Update failed', 'err');
+          isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Changes';
+          return;
+        }
+        const ddmmyyyy = date.split('-').reverse().join('/');
+        const updated = {
+          ...editingEntry, tab, date: ddmmyyyy, billNo, vendor, note: noteVal,
+          amount: breakdown.amount, vat: breakdown.vat, total: breakdown.total,
+          photoUrl: data.photoUrl || editingExistingPhotoUrl,
+          thumb: capturedPhoto ? capturedPhoto.previewUrl : editingEntry.thumb
+        };
+        const rIdx = remoteHistoryEntries.findIndex(x => x.id === editingEntry.id);
+        if (rIdx !== -1) remoteHistoryEntries[rIdx] = updated;
+        const lIdx = entries.findIndex(x => x.id === editingEntry.id);
+        if (lIdx !== -1){ entries[lIdx] = updated; saveEntries(); }
+      } catch(err){
+        setStatus('billStatus','Could not reach your sheet — check connection','err');
+        isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Changes';
+        return;
+      }
+    } else {
+      const lIdx = entries.findIndex(x => x.id === editingEntry.id);
+      if (lIdx !== -1){
+        entries[lIdx] = {
+          ...entries[lIdx], tab, date, billNo, vendor, note: noteVal,
+          amount: breakdown.amount, vat: breakdown.vat, total: breakdown.total,
+          photoBase64: capturedPhoto ? capturedPhoto.base64 : entries[lIdx].photoBase64,
+          thumb: capturedPhoto ? capturedPhoto.previewUrl : entries[lIdx].thumb
+        };
+        saveEntries();
+      }
+    }
+
+    activeTab = tab; localStorage.setItem(LS_KEYS.activeTab, activeTab);
+    editingEntry = null;
+    render(); renderHistory();
+    $('billModal').classList.add('hidden');
+    isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Bill';
+    return;
+  }
+
   isSubmitting = true;
   $('submitBillBtn').disabled = true;
 
@@ -881,10 +1043,12 @@ $('submitBillBtn').onclick = async () => {
   setStatus('billStatus','','');
 
   const vendor = $('fVendor').value.trim();
+  const breakdown = getBillBreakdown();
   const entry = {
-    id:'e'+Date.now(), tab, date, billNo, vendor, amount,
-    vat: $('fVat').value ? parseFloat($('fVat').value) : '',
-    total: amount + (parseFloat($('fVat').value)||0),
+    id:'e'+Date.now(), tab, date, billNo, vendor,
+    amount: breakdown.amount,
+    vat: breakdown.vat,
+    total: breakdown.total,
     note: $('fNote').value.trim(),
     photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
     thumb: capturedPhoto ? capturedPhoto.previewUrl : null,
@@ -956,6 +1120,7 @@ function renderReport(tab, rows){
     </div>
     <div class="report-title">Site Expense Report — ${escapeHtml(tab)}</div>
     <div class="report-meta">Generated ${genDate} · ${sorted.length} bill${sorted.length===1?'':'s'} · sorted by date</div>
+    <div class="report-table-wrap">
     <table class="report-table">
       <thead>
         <tr><th>S/N</th><th>Date</th><th>Bill No</th><th>Vendor</th><th>Note</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">Total</th></tr>
@@ -973,6 +1138,7 @@ function renderReport(tab, rows){
         </tr>`).join('')}
       </tbody>
     </table>
+    </div>
     <div class="report-totals">
       <div><span>Total Bills</span><span>${sorted.length}</span></div>
       <div><span>Subtotal (without VAT)</span><span>${totalAmt.toFixed(3)}</span></div>
