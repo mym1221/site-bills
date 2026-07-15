@@ -540,7 +540,14 @@ function stubHtml(e){
 
 function render(){
   populateTabSelects();
-  const forTab = entries.filter(e => e.tab === activeTab).sort((a,b)=>b.createdAt-a.createdAt);
+  const forTab = getMergedHistoryList()
+    .filter(e => e.tab === activeTab)
+    .sort((a,b) => {
+      const ak = (a.sn === null || a.sn === undefined) ? Infinity : a.sn;
+      const bk = (b.sn === null || b.sn === undefined) ? Infinity : b.sn;
+      if (ak !== bk) return bk - ak;
+      return (b.createdAt||0) - (a.createdAt||0);
+    });
   const totalAmt = forTab.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
   const totalVat = forTab.reduce((s,e)=>s+(parseFloat(e.vat)||0),0);
   const totalGrand = totalAmt + totalVat;
@@ -571,28 +578,7 @@ async function loadHistoryData(){
   }
 
   setStatus('historyStatus','Loading bills from your sheet…','');
-  const collected = [];
-  for (const t of tabsToFetch){
-    try {
-      const res = await fetch(scriptUrl, {
-        method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify({ action:'getReportData', tab:t })
-      });
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.rows)){
-        data.rows.forEach(r => collected.push({
-          id: 'r_' + t + '_' + r.sn,
-          tab: t, date: r.date,
-          billNo: String(r.billNo||''), vendor: r.vendor||'', note: r.note||'',
-          amount: r.amount, vat: r.vat, total: r.total,
-          synced: true, sn: r.sn, photoUrl: r.photoUrl || '',
-          createdAt: 0
-        }));
-        remoteFetchedTabs.add(t);
-      }
-    } catch(err){ /* skip this tab, fall back to local cache for it */ }
-  }
-  remoteHistoryEntries = collected;
+  for (const t of tabsToFetch){ await fetchTabFromSheet(t); }
   setStatus('historyStatus','','');
   renderHistory();
 }
@@ -965,23 +951,35 @@ function renderReport(tab, rows){
 
 $('printReportBtn').onclick = () => window.print();
 
-/* ---------------- RECONCILE (detect rows deleted directly in the Sheet) ---------------- */
-async function reconcileTab(tab){
-  if (!scriptUrl || !tab || !navigator.onLine) return;
+/* Pulls real bill data for one tab from the Sheet — shared source of truth for Home AND History */
+async function fetchTabFromSheet(tab){
+  if (!scriptUrl || !tab || !navigator.onLine) return false;
   try {
     const res = await fetch(scriptUrl, {
       method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action:'listSN', tab })
+      body: JSON.stringify({ action:'getReportData', tab })
     });
     const data = await res.json();
-    if (!data.ok || !Array.isArray(data.sns)) return;
-    const stillThere = new Set(data.sns);
-    const before = entries.length;
-    entries = entries.filter(e => !(e.tab === tab && e.synced && !stillThere.has(e.sn)));
-    if (entries.length !== before){
-      saveEntries(); render(); renderHistory();
+    if (data.ok && Array.isArray(data.rows)){
+      remoteHistoryEntries = remoteHistoryEntries.filter(e => e.tab !== tab);
+      data.rows.forEach(r => remoteHistoryEntries.push({
+        id: 'r_' + tab + '_' + r.sn,
+        tab, date: r.date,
+        billNo: String(r.billNo||''), vendor: r.vendor||'', note: r.note||'',
+        amount: r.amount, vat: r.vat, total: r.total,
+        synced: true, sn: r.sn, photoUrl: r.photoUrl || '',
+        createdAt: 0
+      }));
+      remoteFetchedTabs.add(tab);
+      return true;
     }
-  } catch(err){ /* skip silently — non-critical background check */ }
+  } catch(err){ /* leave cached/local data as fallback */ }
+  return false;
+}
+
+async function refreshHome(){
+  await fetchTabFromSheet(activeTab);
+  render();
 }
 
 async function syncOne(entry){
@@ -1001,11 +999,15 @@ async function syncPending(manual){
   try {
     const pending = entries.filter(e => !e.synced);
     let any = false;
+    const touchedTabs = new Set();
     for (const entry of pending){
-      try { await syncOne(entry); any = true; saveEntries(); }
+      try { await syncOne(entry); any = true; touchedTabs.add(entry.tab); saveEntries(); }
       catch(err){ console.warn('Sync failed for entry', entry.id, err); }
     }
-    if (any){ render(); renderHistory(); }
+    if (any){
+      for (const t of touchedTabs) await fetchTabFromSheet(t);
+      render(); renderHistory();
+    }
     if (manual) setStatus('settingsStatus', any ? 'Synced!' : (pending.length ? 'Still offline or unreachable' : 'Nothing to sync'), any ? 'ok' : '');
   } finally {
     syncing = false;
@@ -1013,17 +1015,17 @@ async function syncPending(manual){
 }
 window.addEventListener('online', () => syncPending(false));
 
-$('activeTab').onchange = (e) => { activeTab = e.target.value; localStorage.setItem(LS_KEYS.activeTab, activeTab); render(); reconcileTab(activeTab); };
+$('activeTab').onchange = (e) => { activeTab = e.target.value; localStorage.setItem(LS_KEYS.activeTab, activeTab); render(); refreshHome(); };
 
 /* ---------------- INIT ---------------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(()=>{});
 buildPinPad();
 startUnlock();
-if (scriptUrl && tabs.length){ render(); reconcileTab(activeTab); }
+if (scriptUrl && tabs.length){ render(); refreshHome(); }
 else if (scriptUrl){
-  fetch(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); reconcileTab(activeTab); } }).catch(()=>render());
+  fetch(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); refreshHome(); } }).catch(()=>render());
 } else { render(); switchView('settings'); }
-setInterval(() => { syncPending(false); reconcileTab(activeTab); }, 30000);
+setInterval(() => { syncPending(false); refreshHome(); }, 30000);
 </script>
 </body>
 </html>
