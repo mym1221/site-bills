@@ -49,10 +49,10 @@
   .totals-value{font-size:22px;font-weight:600;}
   .totals-value.accent{color:var(--accent);font-size:26px;}
 
-  .vat-mode-row{display:flex;gap:8px;margin-bottom:8px;}
-  .vat-mode-btn{flex:1;padding:9px;border-radius:9px;border:1px solid #3a4350;background:var(--panel-2);color:var(--muted);font-size:12.5px;font-family:'Inter',sans-serif;font-weight:600;cursor:pointer;}
-  .vat-mode-btn.active{background:var(--accent);color:#1c1200;border-color:var(--accent);}
-  .vat-rate-row{display:flex;align-items:center;gap:8px;margin-top:8px;}
+  .vat-label-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .vat-toggle-chip{padding:3px 9px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:9.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;}
+  .vat-toggle-chip.manual{border-color:#3a4350;color:var(--muted);}
+  .vat-rate-row{display:flex;align-items:center;gap:8px;margin:-2px 0 9px;}
   .vat-rate-row label{font-size:10px;color:var(--muted);text-transform:uppercase;}
   .vat-rate-row input{width:70px;}
 
@@ -92,24 +92,24 @@
 
   .modal{position:fixed;inset:0;background:rgba(10,12,15,.72);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
   .modal.hidden{display:none;}
-  .sheet{background:var(--panel);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto;}
-  .sheet h2{font-size:19px;margin-bottom:16px;}
-  .field{margin-bottom:14px;}
-  .field label{display:block;font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
-  .field input, .field select{width:100%;background:var(--panel-2);border:1px solid #3a4350;color:#eef1f4;border-radius:10px;padding:12px 12px;font-size:15px;font-family:'Inter',sans-serif;}
+  .sheet{background:var(--panel);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:16px 20px calc(14px + env(safe-area-inset-bottom));max-height:94vh;overflow-y:auto;}
+  .sheet h2{font-size:17px;margin-bottom:10px;}
+  .field{margin-bottom:9px;}
+  .field label{display:block;font-size:10.5px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:4px;}
+  .field input, .field select{width:100%;background:var(--panel-2);border:1px solid #3a4350;color:#eef1f4;border-radius:10px;padding:9px 12px;font-size:14.5px;font-family:'Inter',sans-serif;}
   .field input.mono{font-family:'IBM Plex Mono',monospace;}
   .row2{display:flex;gap:10px;}
   .row2 .field{flex:1;}
 
-  .photo-btn{width:100%;border:1.5px dashed #4a5563;background:var(--panel-2);color:var(--muted);border-radius:12px;padding:22px 12px;text-align:center;font-size:13px;cursor:pointer;margin-bottom:14px;}
-  .photo-preview{width:100%;border-radius:12px;margin-bottom:14px;display:none;max-height:220px;object-fit:cover;}
+  .photo-btn{width:100%;border:1.5px dashed #4a5563;background:var(--panel-2);color:var(--muted);border-radius:10px;padding:10px 12px;text-align:center;font-size:12.5px;cursor:pointer;margin-bottom:9px;}
+  .photo-preview{width:100%;border-radius:10px;margin-bottom:9px;display:none;max-height:130px;object-fit:cover;}
 
-  .computed-total{background:var(--panel-2);border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
-  .computed-total span:first-child{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
-  .computed-total span:last-child{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:19px;color:var(--accent);}
+  .computed-total{background:var(--panel-2);border-radius:10px;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .computed-total span:first-child{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+  .computed-total span:last-child{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px;color:var(--accent);}
 
-  .btn-row{display:flex;gap:10px;margin-top:6px;}
-  .btn{flex:1;padding:14px;border-radius:12px;border:none;font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;}
+  .btn-row{display:flex;gap:10px;margin-top:4px;}
+  .btn{flex:1;padding:13px;border-radius:12px;border:none;font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;letter-spacing:.03em;text-transform:uppercase;cursor:pointer;}
   .btn-primary{background:var(--accent);color:#1c1200;}
   .btn-ghost{background:transparent;color:var(--muted);border:1px solid #3a4350;}
   .btn-danger{background:transparent;color:var(--red);border:1px solid #5a3535;}
@@ -144,10 +144,25 @@
   .report-totals div.grand{font-weight:700;font-size:15px;border-bottom:none;border-top:2px solid #1c2128;margin-top:4px;padding-top:8px;}
 
   @media print{
-    body *{visibility:hidden;}
-    #reportContent, #reportContent *{visibility:visible;}
-    #reportContent{position:absolute;top:0;left:0;width:100%;border-radius:0;padding:0;}
+    @page{ size: A4; margin: 12mm; }
+    body{background:#fff;}
+    #app{max-width:none;padding:0;}
     .bottom-nav, header, #printReportBtn{display:none !important;}
+    .view:not(#view-reports){display:none !important;}
+    #view-reports > *:not(#reportPreviewWrap){display:none !important;}
+    #reportPreviewWrap{display:block !important;margin:0;}
+    #reportContent{border-radius:0;padding:0;width:100%;}
+    .report-table{table-layout:fixed;font-size:9px;}
+    .report-table th, .report-table td{padding:4px 5px;word-wrap:break-word;overflow-wrap:break-word;}
+    .report-table th:nth-child(1), .report-table td:nth-child(1){width:4%;}
+    .report-table th:nth-child(2), .report-table td:nth-child(2){width:9%;}
+    .report-table th:nth-child(3), .report-table td:nth-child(3){width:12%;}
+    .report-table th:nth-child(4), .report-table td:nth-child(4){width:15%;}
+    .report-table th:nth-child(5), .report-table td:nth-child(5){width:17%;}
+    .report-table th:nth-child(6), .report-table td:nth-child(6){width:13%;}
+    .report-table th:nth-child(7), .report-table td:nth-child(7){width:12%;}
+    .report-table th:nth-child(8), .report-table td:nth-child(8){width:18%;}
+    .report-table tr{page-break-inside:avoid;}
   }
 
   /* PIN lock */
@@ -323,21 +338,22 @@
       <label for="fNote">Note / Description (optional)</label>
       <input type="text" id="fNote" placeholder="e.g. cement for generator room repair">
     </div>
-    <div class="field">
-      <label for="fAmount">Amount</label>
-      <input type="number" step="0.001" inputmode="decimal" class="mono" id="fAmount" placeholder="0.000">
+    <div class="row2">
+      <div class="field">
+        <label for="fAmount">Amount</label>
+        <input type="number" step="0.001" inputmode="decimal" class="mono" id="fAmount" placeholder="0.000">
+      </div>
+      <div class="field">
+        <div class="vat-label-row">
+          <label style="margin-bottom:0;">VAT</label>
+          <button type="button" class="vat-toggle-chip" id="vatModeToggle">Auto 10%</button>
+        </div>
+        <input type="number" step="0.001" inputmode="decimal" class="mono" id="fVat" placeholder="0.000">
+      </div>
     </div>
-    <div class="field">
-      <label>VAT</label>
-      <div class="vat-mode-row">
-        <button type="button" class="vat-mode-btn active" id="vatManualBtn">Manual entry</button>
-        <button type="button" class="vat-mode-btn" id="vatAutoBtn">Auto-calculate</button>
-      </div>
-      <input type="number" step="0.001" inputmode="decimal" class="mono" id="fVat" placeholder="0.000">
-      <div class="vat-rate-row" id="vatRateRow" style="display:none;">
-        <label for="fVatRate">Rate %</label>
-        <input type="number" step="0.1" inputmode="decimal" class="mono" id="fVatRate" value="10">
-      </div>
+    <div class="vat-rate-row" id="vatRateRow" style="display:none;">
+      <label for="fVatRate">Rate %</label>
+      <input type="number" step="0.1" inputmode="decimal" class="mono" id="fVatRate" value="10">
     </div>
     <div class="computed-total">
       <span>Total</span>
@@ -765,14 +781,14 @@ $('photoInput').onchange = (e) => {
 let vatMode = 'manual';
 function setVatMode(mode){
   vatMode = mode;
-  $('vatManualBtn').classList.toggle('active', mode==='manual');
-  $('vatAutoBtn').classList.toggle('active', mode==='auto');
+  const chip = $('vatModeToggle');
+  chip.textContent = mode === 'auto' ? 'Auto 10%' : 'Manual';
+  chip.classList.toggle('manual', mode === 'manual');
   $('fVat').readOnly = (mode === 'auto');
   $('vatRateRow').style.display = (mode === 'auto') ? 'flex' : 'none';
   recalcTotal();
 }
-$('vatManualBtn').onclick = () => setVatMode('manual');
-$('vatAutoBtn').onclick = () => setVatMode('auto');
+$('vatModeToggle').onclick = () => setVatMode(vatMode === 'manual' ? 'auto' : 'manual');
 $('fVatRate').oninput = recalcTotal;
 function recalcTotal(){
   const amt = parseFloat($('fAmount').value)||0;
@@ -906,9 +922,27 @@ $('generateReportBtn').onclick = async () => {
   } catch(err){ setStatus('reportStatus','Could not reach your sheet — check connection','err'); }
 };
 
+function parseReportDate(str){
+  if (!str) return new Date(0);
+  const s = String(str);
+  if (s.includes('/')){
+    const [d,m,y] = s.split('/').map(Number);
+    return new Date(y||0, (m||1)-1, d||1);
+  }
+  if (s.includes('-')){
+    const parts = s.split('-').map(Number);
+    // handles either YYYY-MM-DD (old bugged entries) or DD-MM-YYYY
+    if (parts[0] > 31) return new Date(parts[0], (parts[1]||1)-1, parts[2]||1);
+    return new Date(parts[2]||0, (parts[1]||1)-1, parts[0]||1);
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? new Date(0) : d;
+}
+
 function renderReport(tab, rows){
-  const totalAmt = rows.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
-  const totalVat = rows.reduce((s,r)=>s+(parseFloat(r.vat)||0),0);
+  const sorted = rows.slice().sort((a,b) => parseReportDate(a.date) - parseReportDate(b.date));
+  const totalAmt = sorted.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+  const totalVat = sorted.reduce((s,r)=>s+(parseFloat(r.vat)||0),0);
   const grand = totalAmt + totalVat;
   const genDate = new Date().toLocaleString();
 
@@ -921,14 +955,14 @@ function renderReport(tab, rows){
       </div>
     </div>
     <div class="report-title">Site Expense Report — ${escapeHtml(tab)}</div>
-    <div class="report-meta">Generated ${genDate} · ${rows.length} bill${rows.length===1?'':'s'}</div>
+    <div class="report-meta">Generated ${genDate} · ${sorted.length} bill${sorted.length===1?'':'s'} · sorted by date</div>
     <table class="report-table">
       <thead>
         <tr><th>S/N</th><th>Date</th><th>Bill No</th><th>Vendor</th><th>Note</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">Total</th></tr>
       </thead>
       <tbody>
-        ${rows.map(r => `<tr>
-          <td>${r.sn}</td>
+        ${sorted.map((r,idx) => `<tr>
+          <td>${idx+1}</td>
           <td>${escapeHtml(r.date)}</td>
           <td>${escapeHtml(r.billNo||'')}</td>
           <td>${escapeHtml(r.vendor||'')}</td>
@@ -940,7 +974,7 @@ function renderReport(tab, rows){
       </tbody>
     </table>
     <div class="report-totals">
-      <div><span>Total Bills</span><span>${rows.length}</span></div>
+      <div><span>Total Bills</span><span>${sorted.length}</span></div>
       <div><span>Subtotal (without VAT)</span><span>${totalAmt.toFixed(3)}</span></div>
       <div><span>Total VAT</span><span>${totalVat.toFixed(3)}</span></div>
       <div class="grand"><span>Grand Total (with VAT)</span><span>${grand.toFixed(3)}</span></div>
