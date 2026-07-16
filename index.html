@@ -433,6 +433,21 @@ let pinMode = 'unlock'; // 'unlock' | 'setup-first' | 'setup-change'
 let firstPinTemp = '';
 
 const $ = (id) => document.getElementById(id);
+
+// Every network call MUST go through this — plain fetch() has no timeout and can
+// hang indefinitely on a flaky connection, leaving the UI stuck with no error shown.
+async function fetchWithTimeout(url, options={}, timeoutMs=20000){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch(err){
+    if (err.name === 'AbortError') throw new Error('Request timed out — check your connection and try again');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 const saveEntries = () => localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries));
 const saveTabs = () => localStorage.setItem(LS_KEYS.tabs, JSON.stringify(tabs));
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -692,7 +707,7 @@ $('deleteDetailBtn').onclick = async () => {
   if (e.synced && scriptUrl){
     setStatus('detailStatus','Deleting…','');
     try {
-      const res = await fetch(scriptUrl, {
+      const res = await fetchWithTimeout(scriptUrl, {
         method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify({ action:'delete', tab:e.tab, sn:e.sn })
       });
@@ -721,7 +736,7 @@ $('saveSettingsBtn').onclick = async () => {
   localStorage.setItem(LS_KEYS.url, scriptUrl);
   setStatus('settingsStatus','Connecting…','');
   try {
-    const res = await fetch(scriptUrl + '?action=tabs');
+    const res = await fetchWithTimeout(scriptUrl + '?action=tabs');
     const data = await res.json();
     if (data.ok && data.tabs){
       tabs = data.tabs; saveTabs(); populateTabSelects();
@@ -738,7 +753,7 @@ $('fixDatesBtn').onclick = async () => {
   setStatus('fixDatesStatus','Protecting all tabs…','');
   $('fixDatesBtn').disabled = true;
   try {
-    const res = await fetch(scriptUrl, {
+    const res = await fetchWithTimeout(scriptUrl, {
       method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({ action:'fixDateColumns' })
     });
@@ -771,7 +786,7 @@ $('createTabBtn').onclick = async () => {
 
   setStatus('tabStatus','Creating…','');
   try {
-    const res = await fetch(scriptUrl, {
+    const res = await fetchWithTimeout(scriptUrl, {
       method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({ action:'createTab', tabName:name })
     });
@@ -995,7 +1010,7 @@ $('submitBillBtn').onclick = async () => {
           note: noteVal, photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
           existingPhotoUrl: editingExistingPhotoUrl
         };
-        const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
+        const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
         const data = await res.json();
         if (!data.ok){
           setStatus('billStatus', data.error || 'Update failed', 'err');
@@ -1045,7 +1060,7 @@ $('submitBillBtn').onclick = async () => {
     $('submitBillBtn').textContent = 'Checking…';
     setStatus('billStatus','Checking for duplicate bill number…','');
     try {
-      const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'checkDuplicate', tab, billNo }) });
+      const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'checkDuplicate', tab, billNo }) });
       const data = await res.json();
       if (data.ok && data.duplicate){
         setStatus('billStatus', `Bill No ${billNo} already exists in ${tab} (S/N #${data.sn}, ${escapeHtml(data.vendor||'')}). Tap Save Anyway if this is correct.`, 'err');
@@ -1098,8 +1113,9 @@ $('generateReportBtn').onclick = async () => {
   if (!scriptUrl){ setStatus('reportStatus','Connect to your sheet first (Settings)','err'); return; }
   setStatus('reportStatus','Loading bills…','');
   $('reportPreviewWrap').style.display = 'none';
+  $('generateReportBtn').disabled = true;
   try {
-    const res = await fetch(scriptUrl, {
+    const res = await fetchWithTimeout(scriptUrl, {
       method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({ action:'getReportData', tab })
     });
@@ -1108,6 +1124,7 @@ $('generateReportBtn').onclick = async () => {
     renderReport(tab, data.rows || []);
     setStatus('reportStatus','','');
   } catch(err){ setStatus('reportStatus','Could not reach your sheet — check connection','err'); }
+  finally { $('generateReportBtn').disabled = false; }
 };
 
 function parseReportDate(str){
@@ -1179,7 +1196,7 @@ $('printReportBtn').onclick = () => window.print();
 async function fetchTabFromSheet(tab){
   if (!scriptUrl || !tab || !navigator.onLine) return false;
   try {
-    const res = await fetch(scriptUrl, {
+    const res = await fetchWithTimeout(scriptUrl, {
       method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({ action:'getReportData', tab })
     });
@@ -1208,7 +1225,7 @@ async function refreshHome(){
 
 async function syncOne(entry){
   const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, note:entry.note, photoBase64:entry.photoBase64 };
-  const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) });
+  const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Sync failed');
   entry.synced = true; entry.sn = data.sn;
@@ -1247,7 +1264,7 @@ buildPinPad();
 startUnlock();
 if (scriptUrl && tabs.length){ render(); refreshHome(); }
 else if (scriptUrl){
-  fetch(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); refreshHome(); } }).catch(()=>render());
+  fetchWithTimeout(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); refreshHome(); } }).catch(()=>render());
 } else { render(); switchView('settings'); }
 setInterval(() => { syncPending(false); refreshHome(); }, 30000);
 </script>
