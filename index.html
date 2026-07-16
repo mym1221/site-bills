@@ -285,6 +285,13 @@
     </div>
 
     <div class="settings-block">
+      <h3>Device storage</h3>
+      <p class="help-text">Once a bill is safely saved to your Sheet, its local copy on this device is just extra weight — this clears that out without touching anything in your Sheet or Drive. Use this if you ever see a "storage full" error.</p>
+      <button class="btn btn-ghost" style="width:100%;" id="freeSpaceBtn">Free Up Space</button>
+      <div class="status-msg" id="freeSpaceStatus"></div>
+    </div>
+
+    <div class="settings-block">
       <h3>Fix date formatting</h3>
       <p class="help-text">Protects the Date column on every existing tab so Google Sheets can never silently swap day/month (e.g. 11/06 becoming 06/11). One tap covers all tabs — no need to do this by hand in Sheets.</p>
       <button class="btn btn-ghost" style="width:100%;" id="fixDatesBtn">Protect Date Columns (all tabs)</button>
@@ -448,7 +455,21 @@ async function fetchWithTimeout(url, options={}, timeoutMs=20000){
     clearTimeout(timer);
   }
 }
-const saveEntries = () => localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries));
+function saveEntries(){
+  try {
+    localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries));
+  } catch(err){
+    // Storage full — synced entries are redundant local weight (the Sheet is
+    // their real source of truth once fetched), so drop them and retry once.
+    const before = entries.length;
+    entries = entries.filter(e => !e.synced);
+    if (entries.length !== before){
+      try { localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries)); return; }
+      catch(err2){ /* still full even after pruning — fall through */ }
+    }
+    throw new Error('Device storage is full. Go to Settings and tap "Free Up Space" to fix this.');
+  }
+}
 const saveTabs = () => localStorage.setItem(LS_KEYS.tabs, JSON.stringify(tabs));
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -748,6 +769,25 @@ $('saveSettingsBtn').onclick = async () => {
 
 $('syncNowBtn').onclick = () => syncPending(true);
 
+$('freeSpaceBtn').onclick = () => {
+  const before = JSON.stringify(entries).length;
+  entries.forEach(e => { if (e.synced){ e.thumb = null; e.photoBase64 = null; } });
+  try {
+    localStorage.setItem(LS_KEYS.entries, JSON.stringify(entries));
+    const after = JSON.stringify(entries).length;
+    const freedKB = Math.max(0, Math.round((before - after) / 1024));
+    setStatus('freeSpaceStatus', `Freed about ${freedKB} KB. Your Sheet and Drive are untouched — this only cleared local copies already safely saved.`, 'ok');
+    render(); renderHistory();
+  } catch(err){
+    // Even stripping thumbnails wasn't enough — drop synced entries from local storage entirely.
+    // They're still safe and visible via History (which reads live from the Sheet).
+    entries = entries.filter(e => !e.synced);
+    saveEntries();
+    setStatus('freeSpaceStatus', 'Cleared local copies of synced bills to free space. Nothing was deleted from your Sheet — synced bills still show up in History.', 'ok');
+    render(); renderHistory();
+  }
+};
+
 $('fixDatesBtn').onclick = async () => {
   if (!scriptUrl){ setStatus('fixDatesStatus','Connect to your sheet first','err'); return; }
   setStatus('fixDatesStatus','Protecting all tabs…','');
@@ -1017,11 +1057,12 @@ $('submitBillBtn').onclick = async () => {
           return;
         }
         const ddmmyyyy = date.split('-').reverse().join('/');
+        const finalPhotoUrl = data.photoUrl || editingExistingPhotoUrl;
         const updated = {
           ...editingEntry, tab, date: ddmmyyyy, billNo, vendor, note: noteVal,
           amount: breakdown.amount, vat: breakdown.vat, total: breakdown.total,
-          photoUrl: data.photoUrl || editingExistingPhotoUrl,
-          thumb: capturedPhoto ? capturedPhoto.previewUrl : editingEntry.thumb
+          photoUrl: finalPhotoUrl,
+          thumb: finalPhotoUrl ? null : editingEntry.thumb
         };
         const rIdx = remoteHistoryEntries.findIndex(x => x.id === editingEntry.id);
         if (rIdx !== -1) remoteHistoryEntries[rIdx] = updated;
@@ -1212,10 +1253,23 @@ async function fetchTabFromSheet(tab){
         createdAt: 0
       }));
       remoteFetchedTabs.add(tab);
+      pruneLocalEntries(); // synced local copies are now redundant — the Sheet is the source of truth
       return true;
     }
   } catch(err){ /* leave cached/local data as fallback */ }
   return false;
+}
+
+// Keeps localStorage lean: once a tab's real data has been fetched from the Sheet,
+// any locally-cached SYNCED bills for that tab are redundant weight — they're already
+// safely in Drive/Sheets and getMergedHistoryList() reads the live copy instead anyway.
+// Only still-pending (not-yet-synced) bills need to stay in local storage.
+function pruneLocalEntries(){
+  const before = entries.length;
+  entries = entries.filter(e => !(e.synced && remoteFetchedTabs.has(e.tab)));
+  if (entries.length !== before){
+    try { saveEntries(); } catch(err){ /* saveEntries has its own quota fallback */ }
+  }
 }
 
 async function refreshHome(){
@@ -1229,7 +1283,7 @@ async function syncOne(entry){
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Sync failed');
   entry.synced = true; entry.sn = data.sn;
-  if (data.photoUrl) entry.photoUrl = data.photoUrl;
+  if (data.photoUrl){ entry.photoUrl = data.photoUrl; entry.thumb = null; } // Drive has it now, drop the local copy
   entry.photoBase64 = null;
 }
 let syncing = false;
