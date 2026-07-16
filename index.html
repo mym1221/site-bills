@@ -845,7 +845,13 @@ $('addBillBtn').onclick = () => {
   $('billModal').classList.remove('hidden');
 };
 $('fTab').onchange = () => { $('fDate').value = suggestDateForTab($('fTab').value); };
-$('cancelBillBtn').onclick = () => $('billModal').classList.add('hidden');
+$('cancelBillBtn').onclick = () => {
+  $('billModal').classList.add('hidden');
+  editingEntry = null;
+  isSubmitting = false;
+  $('submitBillBtn').disabled = false;
+  $('submitBillBtn').textContent = 'Save Bill';
+};
 $('photoBtn').onclick = () => $('photoInput').click();
 $('photoInput').onchange = (e) => {
   const file = e.target.files[0]; if (!file) return;
@@ -887,20 +893,21 @@ $('vatModeToggle').onclick = () => {
 // Returns the real {amount, vat, total} to store, regardless of which mode was used to get there
 function getBillBreakdown(){
   const raw = parseFloat($('fAmount').value) || 0;
+  const round3 = (n) => Math.round((n + Number.EPSILON) * 1000) / 1000;
   if (vatMode === 'reverse'){
-    const total = raw;
-    const amount = total / (1 + VAT_RATE/100);
-    const vat = total - amount;
-    return { amount, vat, total };
+    const total = round3(raw);
+    const amount = round3(total / (1 + VAT_RATE/100));
+    const vat = round3(total - amount);
+    return { amount, vat, total: round3(amount + vat) };
   }
   if (vatMode === 'auto'){
-    const amount = raw;
-    const vat = amount * VAT_RATE / 100;
-    return { amount, vat, total: amount + vat };
+    const amount = round3(raw);
+    const vat = round3(amount * VAT_RATE / 100);
+    return { amount, vat, total: round3(amount + vat) };
   }
-  const amount = raw;
-  const vat = parseFloat($('fVat').value) || 0;
-  return { amount, vat, total: amount + vat };
+  const amount = round3(raw);
+  const vat = round3(parseFloat($('fVat').value) || 0);
+  return { amount, vat, total: round3(amount + vat) };
 }
 
 function recalcTotal(){
@@ -972,17 +979,16 @@ $('submitBillBtn').onclick = async () => {
     $('submitBillBtn').textContent = 'Saving…';
     setStatus('billStatus','','');
 
-    const vendor = $('fVendor').value.trim();
-    const noteVal = $('fNote').value.trim() || $('fCategory').value;
-    const breakdown = getBillBreakdown();
+    try {
+      const vendor = $('fVendor').value.trim();
+      const noteVal = $('fNote').value.trim() || $('fCategory').value;
+      const breakdown = getBillBreakdown();
 
-    if (editingEntry.synced){
-      if (!scriptUrl || !navigator.onLine){
-        setStatus('billStatus','You need to be online to save changes to a synced bill.','err');
-        isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Changes';
-        return;
-      }
-      try {
+      if (editingEntry.synced){
+        if (!scriptUrl || !navigator.onLine){
+          setStatus('billStatus','You need to be online to save changes to a synced bill.','err');
+          return;
+        }
         const payload = {
           action:'update', tab: editingEntry.tab, sn: editingEntry.sn,
           date, billNo, vendor, amount: breakdown.amount, vat: breakdown.vat,
@@ -993,7 +999,6 @@ $('submitBillBtn').onclick = async () => {
         const data = await res.json();
         if (!data.ok){
           setStatus('billStatus', data.error || 'Update failed', 'err');
-          isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Changes';
           return;
         }
         const ddmmyyyy = date.split('-').reverse().join('/');
@@ -1007,29 +1012,29 @@ $('submitBillBtn').onclick = async () => {
         if (rIdx !== -1) remoteHistoryEntries[rIdx] = updated;
         const lIdx = entries.findIndex(x => x.id === editingEntry.id);
         if (lIdx !== -1){ entries[lIdx] = updated; saveEntries(); }
-      } catch(err){
-        setStatus('billStatus','Could not reach your sheet — check connection','err');
-        isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Changes';
-        return;
+      } else {
+        const lIdx = entries.findIndex(x => x.id === editingEntry.id);
+        if (lIdx !== -1){
+          entries[lIdx] = {
+            ...entries[lIdx], tab, date, billNo, vendor, note: noteVal,
+            amount: breakdown.amount, vat: breakdown.vat, total: breakdown.total,
+            photoBase64: capturedPhoto ? capturedPhoto.base64 : entries[lIdx].photoBase64,
+            thumb: capturedPhoto ? capturedPhoto.previewUrl : entries[lIdx].thumb
+          };
+          saveEntries();
+        }
       }
-    } else {
-      const lIdx = entries.findIndex(x => x.id === editingEntry.id);
-      if (lIdx !== -1){
-        entries[lIdx] = {
-          ...entries[lIdx], tab, date, billNo, vendor, note: noteVal,
-          amount: breakdown.amount, vat: breakdown.vat, total: breakdown.total,
-          photoBase64: capturedPhoto ? capturedPhoto.base64 : entries[lIdx].photoBase64,
-          thumb: capturedPhoto ? capturedPhoto.previewUrl : entries[lIdx].thumb
-        };
-        saveEntries();
-      }
-    }
 
-    activeTab = tab; localStorage.setItem(LS_KEYS.activeTab, activeTab);
-    editingEntry = null;
-    render(); renderHistory();
-    $('billModal').classList.add('hidden');
-    isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Bill';
+      activeTab = tab; localStorage.setItem(LS_KEYS.activeTab, activeTab);
+      editingEntry = null;
+      render(); renderHistory();
+      $('billModal').classList.add('hidden');
+    } catch(err){
+      console.error('Save changes failed:', err);
+      setStatus('billStatus', 'Could not reach your sheet — check connection: ' + err.message, 'err');
+    } finally {
+      isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Bill';
+    }
     return;
   }
 
@@ -1056,28 +1061,33 @@ $('submitBillBtn').onclick = async () => {
   $('submitBillBtn').textContent = 'Saving…';
   setStatus('billStatus','','');
 
-  const vendor = $('fVendor').value.trim();
-  const breakdown = getBillBreakdown();
-  const entry = {
-    id:'e'+Date.now(), tab, date, billNo, vendor,
-    amount: breakdown.amount,
-    vat: breakdown.vat,
-    total: breakdown.total,
-    note: $('fNote').value.trim() || $('fCategory').value,
-    photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
-    thumb: capturedPhoto ? capturedPhoto.previewUrl : null,
-    synced:false, sn:null, createdAt:Date.now()
-  };
-  entries.push(entry); saveEntries();
-  activeTab = tab; localStorage.setItem(LS_KEYS.activeTab, activeTab);
-  render();
-  $('billModal').classList.add('hidden');
-  syncPending(false);
-
-  skipDuplicateCheck = false;
-  $('submitBillBtn').textContent = 'Save Bill';
-  $('submitBillBtn').disabled = false;
-  isSubmitting = false;
+  try {
+    const vendor = $('fVendor').value.trim();
+    const breakdown = getBillBreakdown();
+    const entry = {
+      id:'e'+Date.now(), tab, date, billNo, vendor,
+      amount: breakdown.amount,
+      vat: breakdown.vat,
+      total: breakdown.total,
+      note: $('fNote').value.trim() || $('fCategory').value,
+      photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
+      thumb: capturedPhoto ? capturedPhoto.previewUrl : null,
+      synced:false, sn:null, createdAt:Date.now()
+    };
+    entries.push(entry); saveEntries();
+    activeTab = tab; localStorage.setItem(LS_KEYS.activeTab, activeTab);
+    render();
+    $('billModal').classList.add('hidden');
+    syncPending(false);
+  } catch(err){
+    console.error('Save bill failed:', err);
+    setStatus('billStatus', 'Something went wrong saving this bill: ' + err.message, 'err');
+  } finally {
+    skipDuplicateCheck = false;
+    $('submitBillBtn').textContent = 'Save Bill';
+    $('submitBillBtn').disabled = false;
+    isSubmitting = false;
+  }
 };
 
 /* ---------------- SYNC ---------------- */
