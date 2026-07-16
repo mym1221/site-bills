@@ -678,7 +678,6 @@ function openDetail(id){
     <div class="detail-row"><span>VAT</span><span>${e.vat !== '' && e.vat !== undefined ? parseFloat(e.vat).toFixed(3) : '—'}</span></div>
     <div class="detail-row"><span>Total</span><span>${(parseFloat(e.total)||0).toFixed(3)}</span></div>
     <div class="detail-row"><span>Status</span><span>${e.synced ? 'Synced (S/N #'+e.sn+')' : 'Pending sync'}</span></div>
-    ${e.category ? `<div class="detail-row"><span>Category</span><span>${escapeHtml(e.category)}</span></div>` : ''}
     ${e.note ? `<div class="detail-row"><span>Note</span><span style="text-align:right;max-width:70%;font-family:'Inter',sans-serif;">${escapeHtml(e.note)}</span></div>` : ''}
     ${e.photoUrl ? `<div class="detail-row"><span>Photo</span><span><a href="${e.photoUrl}" target="_blank" style="color:var(--accent);">Open in Drive</a></span></div>` : ''}
   `;
@@ -801,7 +800,7 @@ function openEditForBill(entry){
   $('fDate').value = ddmmyyyyToIso(entry.date);
   $('fBillNo').value = entry.billNo || '';
   $('fVendor').value = entry.vendor || '';
-  $('fCategory').value = entry.category || '';
+  $('fCategory').value = '';
   $('fNote').value = entry.note || '';
   $('fAmount').value = entry.amount || '';
   $('fVat').value = entry.vat !== '' && entry.vat !== undefined ? entry.vat : '';
@@ -974,8 +973,7 @@ $('submitBillBtn').onclick = async () => {
     setStatus('billStatus','','');
 
     const vendor = $('fVendor').value.trim();
-    const categoryVal = $('fCategory').value;
-    const noteVal = $('fNote').value.trim();
+    const noteVal = $('fNote').value.trim() || $('fCategory').value;
     const breakdown = getBillBreakdown();
 
     if (editingEntry.synced){
@@ -988,7 +986,7 @@ $('submitBillBtn').onclick = async () => {
         const payload = {
           action:'update', tab: editingEntry.tab, sn: editingEntry.sn,
           date, billNo, vendor, amount: breakdown.amount, vat: breakdown.vat,
-          note: noteVal, category: categoryVal, photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
+          note: noteVal, photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
           existingPhotoUrl: editingExistingPhotoUrl
         };
         const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) });
@@ -1000,7 +998,7 @@ $('submitBillBtn').onclick = async () => {
         }
         const ddmmyyyy = date.split('-').reverse().join('/');
         const updated = {
-          ...editingEntry, tab, date: ddmmyyyy, billNo, vendor, note: noteVal, category: categoryVal,
+          ...editingEntry, tab, date: ddmmyyyy, billNo, vendor, note: noteVal,
           amount: breakdown.amount, vat: breakdown.vat, total: breakdown.total,
           photoUrl: data.photoUrl || editingExistingPhotoUrl,
           thumb: capturedPhoto ? capturedPhoto.previewUrl : editingEntry.thumb
@@ -1018,7 +1016,7 @@ $('submitBillBtn').onclick = async () => {
       const lIdx = entries.findIndex(x => x.id === editingEntry.id);
       if (lIdx !== -1){
         entries[lIdx] = {
-          ...entries[lIdx], tab, date, billNo, vendor, note: noteVal, category: categoryVal,
+          ...entries[lIdx], tab, date, billNo, vendor, note: noteVal,
           amount: breakdown.amount, vat: breakdown.vat, total: breakdown.total,
           photoBase64: capturedPhoto ? capturedPhoto.base64 : entries[lIdx].photoBase64,
           thumb: capturedPhoto ? capturedPhoto.previewUrl : entries[lIdx].thumb
@@ -1065,8 +1063,7 @@ $('submitBillBtn').onclick = async () => {
     amount: breakdown.amount,
     vat: breakdown.vat,
     total: breakdown.total,
-    note: $('fNote').value.trim(),
-    category: $('fCategory').value,
+    note: $('fNote').value.trim() || $('fCategory').value,
     photoBase64: capturedPhoto ? capturedPhoto.base64 : null,
     thumb: capturedPhoto ? capturedPhoto.previewUrl : null,
     synced:false, sn:null, createdAt:Date.now()
@@ -1182,7 +1179,7 @@ async function fetchTabFromSheet(tab){
       data.rows.forEach(r => remoteHistoryEntries.push({
         id: 'r_' + tab + '_' + r.sn,
         tab, date: r.date,
-        billNo: String(r.billNo||''), vendor: r.vendor||'', note: r.note||'', category: r.category||'',
+        billNo: String(r.billNo||''), vendor: r.vendor||'', note: r.note||'',
         amount: r.amount, vat: r.vat, total: r.total,
         synced: true, sn: r.sn, photoUrl: r.photoUrl || '',
         createdAt: 0
@@ -1200,7 +1197,7 @@ async function refreshHome(){
 }
 
 async function syncOne(entry){
-  const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, note:entry.note, category:entry.category, photoBase64:entry.photoBase64 };
+  const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, note:entry.note, photoBase64:entry.photoBase64 };
   const res = await fetch(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Sync failed');
