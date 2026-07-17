@@ -734,8 +734,9 @@ function openDetail(id){
 $('closeDetailBtn').onclick = () => $('detailModal').classList.add('hidden');
 $('deleteDetailBtn').onclick = async () => {
   if (!currentDetailEntry) return;
-  if (!confirm('Delete this bill? This also removes it from your Google Sheet if already synced.')) return;
+  if (!confirm('Delete this bill? This also removes it from your Google Sheet if already synced. Every bill after it in this tab will be renumbered to close the gap.')) return;
   const e = currentDetailEntry;
+  let wasSynced = false;
   if (e.synced && scriptUrl){
     setStatus('detailStatus','Deleting…','');
     try {
@@ -749,12 +750,19 @@ $('deleteDetailBtn').onclick = async () => {
         if (!alreadyGone){ setStatus('detailStatus', data.error || 'Delete failed', 'err'); return; }
         // Row was already removed directly in the Sheet — fall through and clean up locally too.
       }
+      wasSynced = true;
     } catch(err){ setStatus('detailStatus','Could not reach sheet — check connection','err'); return; }
   }
   entries = entries.filter(x => x.id !== e.id);
   remoteHistoryEntries = remoteHistoryEntries.filter(x => x.id !== e.id);
   saveEntries();
   $('detailModal').classList.add('hidden');
+  if (wasSynced){
+    // Every bill after the deleted one just got renumbered on the server —
+    // refetch this tab so local S/N values match reality instead of going stale.
+    remoteFetchedTabs.delete(e.tab);
+    await fetchTabFromSheet(e.tab);
+  }
   render(); renderHistory();
 };
 
