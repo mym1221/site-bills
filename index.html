@@ -360,7 +360,8 @@
     <div class="row2">
       <div class="field">
         <label for="fVendor">Vendor</label>
-        <input type="text" id="fVendor" placeholder="e.g. ALKARRAR TRADING">
+        <input type="text" id="fVendor" list="vendorList" placeholder="e.g. ALKARRAR TRADING">
+        <datalist id="vendorList"></datalist>
       </div>
       <div class="field">
         <label for="fCategory">Category</label>
@@ -402,6 +403,7 @@
       <button class="btn btn-ghost" id="cancelBillBtn">Cancel</button>
       <button class="btn btn-primary" id="submitBillBtn">Save Bill</button>
     </div>
+    <button class="btn btn-ghost" id="saveAddAnotherBtn" style="width:100%;margin-top:8px;">Save &amp; Add Another</button>
     <div class="status-msg" id="billStatus"></div>
   </div>
 </div>
@@ -483,6 +485,18 @@ function saveEntries(){
 }
 const saveTabs = () => localStorage.setItem(LS_KEYS.tabs, JSON.stringify(tabs));
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Builds the Vendor autocomplete list from every vendor name seen so far (synced + local pending),
+// so typing a few letters of a vendor you've used before suggests it instantly.
+function populateVendorDatalist(){
+  const names = new Set();
+  [...remoteHistoryEntries, ...entries].forEach(e => {
+    const v = (e.vendor||'').trim();
+    if (v) names.add(v);
+  });
+  const sorted = Array.from(names).sort((a,b) => a.localeCompare(b));
+  $('vendorList').innerHTML = sorted.map(n => `<option value="${escapeHtml(n)}">`).join('');
+}
 
 /* ---------------- PIN LOCK ---------------- */
 function buildPinPad(){
@@ -887,6 +901,7 @@ function openEditForBill(entry){
   skipDuplicateCheck = true; // editing the same bill shouldn't trigger its own duplicate-number check
   isSubmitting = false;
   $('submitBillBtn').disabled = false;
+  $('saveAddAnotherBtn').style.display = 'none'; // doesn't make sense mid-edit
   $('billModal').classList.remove('hidden');
 }
 
@@ -914,7 +929,9 @@ $('addBillBtn').onclick = () => {
   isSubmitting = false;
   $('submitBillBtn').disabled = false;
   $('submitBillBtn').textContent = 'Save Bill';
+  $('saveAddAnotherBtn').style.display = 'block';
   $('billModal').classList.remove('hidden');
+  setTimeout(() => $('fVendor').focus(), 50);
 };
 $('fTab').onchange = () => { $('fDate').value = suggestDateForTab($('fTab').value); };
 $('cancelBillBtn').onclick = () => {
@@ -968,6 +985,7 @@ async function addPhotoFiles(fileList){
     catch(err){ console.warn('Could not process photo', err); }
   }
   renderPhotoThumbs();
+  if (!$('fVendor').value) $('fVendor').focus();
 }
 $('photoCameraInput').onchange = (e) => { if (e.target.files.length) addPhotoFiles(e.target.files); e.target.value=''; };
 $('photoGalleryInput').onchange = (e) => { if (e.target.files.length) addPhotoFiles(e.target.files); e.target.value=''; };
@@ -1051,12 +1069,28 @@ function suggestDateForTab(tabName){
 let isSubmitting = false;
 let skipDuplicateCheck = false;
 
-$('submitBillBtn').onclick = async () => {
-  if (isSubmitting) return;
+// Checks already-loaded data first (instant, no network wait). Only bills already
+// fetched/synced are checked this way — this is intentionally a fast local check,
+// not a guaranteed-fresh server check, trading a tiny sliver of edge-case risk
+// (another device added the same number seconds ago) for speed on every single save.
+function checkDuplicateLocal(tab, billNo){
+  const needle = String(billNo).trim();
+  if (!needle) return null;
+  const pool = [...remoteHistoryEntries, ...entries];
+  for (const e of pool){
+    if (e.tab === tab && String(e.billNo||'').trim() === needle){
+      return { sn: e.sn, vendor: e.vendor };
+    }
+  }
+  return null;
+}
+
+async function performSaveBill(keepOpenForNext){
+  if (isSubmitting) return false;
   const tab = $('fTab').value, date = $('fDate').value;
   const amount = parseFloat($('fAmount').value)||0;
   const billNo = $('fBillNo').value.trim();
-  if (!date || !amount){ setStatus('billStatus','Date and amount are required','err'); return; }
+  if (!date || !amount){ setStatus('billStatus','Date and amount are required','err'); return false; }
 
   const tabInfo = parseTabMonthYear(tab);
   if (tabInfo){
@@ -1068,17 +1102,19 @@ $('submitBillBtn').onclick = async () => {
       );
       if (!proceed){
         setStatus('billStatus','Save cancelled — check the date or tab.','err');
-        return;
+        return false;
       }
     }
   }
+
+  const activeBtn = keepOpenForNext ? $('saveAddAnotherBtn') : $('submitBillBtn');
 
   if (editingEntry){
     isSubmitting = true;
     $('submitBillBtn').disabled = true;
     $('submitBillBtn').textContent = 'Saving…';
     setStatus('billStatus','','');
-
+    let success = false;
     try {
       const vendor = $('fVendor').value.trim();
       const noteVal = $('fNote').value.trim() || $('fCategory').value;
@@ -1087,7 +1123,7 @@ $('submitBillBtn').onclick = async () => {
       if (editingEntry.synced){
         if (!scriptUrl || !navigator.onLine){
           setStatus('billStatus','You need to be online to save changes to a synced bill.','err');
-          return;
+          return false;
         }
         const payload = {
           action:'update', tab: editingEntry.tab, sn: editingEntry.sn,
@@ -1099,7 +1135,7 @@ $('submitBillBtn').onclick = async () => {
         const data = await res.json();
         if (!data.ok){
           setStatus('billStatus', data.error || 'Update failed', 'err');
-          return;
+          return false;
         }
         const ddmmyyyy = date.split('-').reverse().join('/');
         const finalPhotoUrl = data.photoUrl || editingExistingPhotoUrl;
@@ -1130,38 +1166,36 @@ $('submitBillBtn').onclick = async () => {
       editingEntry = null;
       render(); renderHistory();
       $('billModal').classList.add('hidden');
+      success = true;
     } catch(err){
       console.error('Save changes failed:', err);
       setStatus('billStatus', 'Could not reach your sheet — check connection: ' + err.message, 'err');
     } finally {
       isSubmitting=false; $('submitBillBtn').disabled=false; $('submitBillBtn').textContent='Save Bill';
     }
-    return;
+    return success;
   }
 
   isSubmitting = true;
   $('submitBillBtn').disabled = true;
+  $('saveAddAnotherBtn').disabled = true;
 
-  if (billNo && !skipDuplicateCheck && scriptUrl && navigator.onLine){
-    $('submitBillBtn').textContent = 'Checking…';
-    setStatus('billStatus','Checking for duplicate bill number…','');
-    try {
-      const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'checkDuplicate', tab, billNo }) });
-      const data = await res.json();
-      if (data.ok && data.duplicate){
-        setStatus('billStatus', `Bill No ${billNo} already exists in ${tab} (S/N #${data.sn}, ${escapeHtml(data.vendor||'')}). Tap Save Anyway if this is correct.`, 'err');
-        $('submitBillBtn').textContent = 'Save Anyway';
-        $('submitBillBtn').disabled = false;
-        skipDuplicateCheck = true;
-        isSubmitting = false;
-        return;
-      }
-    } catch(err){ /* couldn't verify — proceed rather than block on a network hiccup */ }
+  if (billNo && !skipDuplicateCheck){
+    const dup = checkDuplicateLocal(tab, billNo);
+    if (dup){
+      setStatus('billStatus', `Bill No ${billNo} already exists in ${tab} (S/N #${dup.sn}, ${escapeHtml(dup.vendor||'')}). Tap again to save anyway.`, 'err');
+      $('submitBillBtn').disabled = false;
+      $('saveAddAnotherBtn').disabled = false;
+      skipDuplicateCheck = true;
+      isSubmitting = false;
+      return false;
+    }
   }
 
-  $('submitBillBtn').textContent = 'Saving…';
+  activeBtn.textContent = 'Saving…';
   setStatus('billStatus','','');
 
+  let success = false;
   try {
     const vendor = $('fVendor').value.trim();
     const breakdown = getBillBreakdown();
@@ -1178,8 +1212,9 @@ $('submitBillBtn').onclick = async () => {
     entries.push(entry); saveEntries();
     activeTab = tab; localStorage.setItem(LS_KEYS.activeTab, activeTab);
     render();
-    $('billModal').classList.add('hidden');
+    populateVendorDatalist();
     syncPending(false);
+    success = true;
   } catch(err){
     console.error('Save bill failed:', err);
     setStatus('billStatus', 'Something went wrong saving this bill: ' + err.message, 'err');
@@ -1187,7 +1222,31 @@ $('submitBillBtn').onclick = async () => {
     skipDuplicateCheck = false;
     $('submitBillBtn').textContent = 'Save Bill';
     $('submitBillBtn').disabled = false;
+    $('saveAddAnotherBtn').disabled = false;
+    $('saveAddAnotherBtn').textContent = 'Save & Add Another';
     isSubmitting = false;
+  }
+  return success;
+}
+
+$('submitBillBtn').onclick = async () => {
+  const ok = await performSaveBill(false);
+  if (ok && !editingEntry) $('billModal').classList.add('hidden');
+};
+
+$('saveAddAnotherBtn').onclick = async () => {
+  const ok = await performSaveBill(true);
+  if (ok){
+    // Reset the form for the next bill, keep the same tab, don't close the modal.
+    const tab = $('fTab').value;
+    $('fBillNo').value=''; $('fVendor').value=''; $('fCategory').value=''; $('fAmount').value=''; $('fVat').value=''; $('fNote').value='';
+    $('computedTotal').textContent='0.000';
+    $('computedBreakdown').textContent='Amount 0.000 · VAT 0.000';
+    capturedPhotos = []; renderPhotoThumbs();
+    $('fDate').value = suggestDateForTab(tab);
+    setVatMode('manual');
+    setStatus('billStatus','✓ Saved — ready for the next bill','ok');
+    $('fVendor').focus();
   }
 };
 
@@ -1299,6 +1358,7 @@ async function fetchTabFromSheet(tab){
       }));
       remoteFetchedTabs.add(tab);
       pruneLocalEntries(); // synced local copies are now redundant — the Sheet is the source of truth
+      populateVendorDatalist();
       return true;
     }
   } catch(err){ /* leave cached/local data as fallback */ }
@@ -1361,6 +1421,7 @@ $('activeTab').onchange = (e) => { activeTab = e.target.value; localStorage.setI
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(()=>{});
 buildPinPad();
 startUnlock();
+populateVendorDatalist();
 if (scriptUrl && tabs.length){ render(); refreshHome(); }
 else if (scriptUrl){
   fetchWithTimeout(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); refreshHome(); } }).catch(()=>render());
