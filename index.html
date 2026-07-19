@@ -1413,6 +1413,7 @@ async function syncOne(entry){
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Sync failed');
   entry.synced = true; entry.sn = data.sn;
+  if (data.billNo) entry.billNo = data.billNo; // picks up the auto-assigned AUTO-N if the bill had no number
   if (data.photoUrl){ entry.photoUrl = data.photoUrl; entry.thumb = null; } // Drive has it now, drop the local copy
   entry.photosBase64 = null;
 }
