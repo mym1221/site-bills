@@ -931,9 +931,13 @@ $('addBillBtn').onclick = () => {
   $('submitBillBtn').textContent = 'Save Bill';
   $('saveAddAnotherBtn').style.display = 'block';
   $('billModal').classList.remove('hidden');
-  setTimeout(() => $('fVendor').focus(), 50);
+  setTimeout(() => $('photoCameraBtn').focus(), 50);
+  if (!remoteFetchedTabs.has(activeTab)) fetchTabFromSheet(activeTab);
 };
-$('fTab').onchange = () => { $('fDate').value = suggestDateForTab($('fTab').value); };
+$('fTab').onchange = () => {
+  $('fDate').value = suggestDateForTab($('fTab').value);
+  if (!remoteFetchedTabs.has($('fTab').value)) fetchTabFromSheet($('fTab').value);
+};
 $('cancelBillBtn').onclick = () => {
   $('billModal').classList.add('hidden');
   editingEntry = null;
@@ -1181,14 +1185,35 @@ async function performSaveBill(keepOpenForNext){
   $('saveAddAnotherBtn').disabled = true;
 
   if (billNo && !skipDuplicateCheck){
-    const dup = checkDuplicateLocal(tab, billNo);
-    if (dup){
-      setStatus('billStatus', `Bill No ${billNo} already exists in ${tab} (S/N #${dup.sn}, ${escapeHtml(dup.vendor||'')}). Tap again to save anyway.`, 'err');
-      $('submitBillBtn').disabled = false;
-      $('saveAddAnotherBtn').disabled = false;
-      skipDuplicateCheck = true;
-      isSubmitting = false;
-      return false;
+    if (remoteFetchedTabs.has(tab)){
+      // Local data for this tab is confirmed fresh this session — safe to check instantly.
+      const dup = checkDuplicateLocal(tab, billNo);
+      if (dup){
+        setStatus('billStatus', `Bill No ${billNo} already exists in ${tab} (S/N #${dup.sn}, ${escapeHtml(dup.vendor||'')}). Tap again to save anyway.`, 'err');
+        $('submitBillBtn').disabled = false;
+        $('saveAddAnotherBtn').disabled = false;
+        skipDuplicateCheck = true;
+        isSubmitting = false;
+        return false;
+      }
+    } else if (scriptUrl && navigator.onLine){
+      // This tab hasn't been loaded into memory yet this session — the local cache
+      // can't be trusted, so ask the Sheet directly instead of risking a silent duplicate.
+      activeBtn.textContent = 'Checking…';
+      setStatus('billStatus','Checking for duplicate bill number…','');
+      try {
+        const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'checkDuplicate', tab, billNo }) });
+        const data = await res.json();
+        if (data.ok && data.duplicate){
+          setStatus('billStatus', `Bill No ${billNo} already exists in ${tab} (S/N #${data.sn}, ${escapeHtml(data.vendor||'')}). Tap again to save anyway.`, 'err');
+          $('submitBillBtn').disabled = false;
+          $('saveAddAnotherBtn').disabled = false;
+          skipDuplicateCheck = true;
+          isSubmitting = false;
+          activeBtn.textContent = keepOpenForNext ? 'Save & Add Another' : 'Save Bill';
+          return false;
+        }
+      } catch(err){ /* couldn't verify — proceed rather than block on a network hiccup */ }
     }
   }
 
