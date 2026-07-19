@@ -76,6 +76,7 @@
   .stub-vendor{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .stub-total{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:15px;flex-shrink:0;}
   .stub-meta{font-size:12px;color:#6b7684;margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .stub-tab{background:var(--text-dark);color:var(--paper);font-size:10px;font-weight:600;padding:1px 7px;border-radius:20px;letter-spacing:.02em;}
   .badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
   .badge.synced{background:#e3f5ec;color:var(--green);}
   .badge.pending{background:#fdf1de;color:#b9740b;}
@@ -633,6 +634,7 @@ function stubHtml(e){
           <div class="stub-total mono">${(parseFloat(e.total)||0).toFixed(3)}</div>
         </div>
         <div class="stub-meta">
+          <span class="stub-tab">${escapeHtml(e.tab)}</span>
           <span>${e.date}</span>
           ${e.billNo ? `<span>#${escapeHtml(e.billNo)}</span>` : ''}
           <span class="badge ${e.synced ? 'synced':'pending'}">${e.synced ? 'Synced':'Pending'}</span>
