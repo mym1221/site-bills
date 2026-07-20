@@ -35,6 +35,10 @@
   .brand span{color:var(--accent);}
   .icon-btn{background:var(--panel);border:1px solid #3a4350;color:#eef1f4;width:40px;height:40px;border-radius:10px;font-size:18px;cursor:pointer;}
 
+  .mode-toggle{display:flex;background:var(--panel);border-radius:12px;padding:4px;margin-bottom:14px;border:1px solid #333c47;}
+  .mode-btn{flex:1;background:none;border:none;color:var(--muted);padding:10px 6px;border-radius:9px;font-family:'Oswald',sans-serif;font-weight:600;font-size:13px;letter-spacing:.02em;cursor:pointer;}
+  .mode-btn.active{background:var(--accent);color:#1c1200;}
+
   .totals-card{background:var(--panel);border-radius:16px;padding:18px 20px;border:1px solid #333c47;}
   .tab-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
   .tab-row label{font-size:11px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;}
@@ -163,11 +167,13 @@
     @page{ size: A4; margin: 12mm; }
     body{background:#fff;}
     #app{max-width:none;padding:0;}
-    .bottom-nav, header, #printReportBtn{display:none !important;}
+    .bottom-nav, header, #printReportBtn, #printVatBtn{display:none !important;}
     .view:not(#view-reports){display:none !important;}
-    #view-reports > *:not(#reportPreviewWrap){display:none !important;}
-    #reportPreviewWrap{display:block !important;margin:0;}
-    #reportContent{border-radius:0;padding:0;width:100%;}
+    #view-reports > header, #view-reports > .mode-toggle{display:none !important;}
+    #monthlyReportSection > *:not(#reportPreviewWrap){display:none !important;}
+    #vatComparisonSection > *:not(#vatComparisonWrap){display:none !important;}
+    #reportPreviewWrap, #vatComparisonWrap{margin:0;}
+    #reportContent, #vatComparisonContent{border-radius:0;padding:0;width:100%;}
     .report-table-wrap{overflow:visible;}
     .report-table{min-width:0;font-size:9px;}
     .report-table th, .report-table td{padding:4px 5px;}
@@ -207,6 +213,11 @@
       <div class="brand"><img src="logo.png" alt="MYM Constructions"><div class="brand-text"><span class="co">MYM</span><span class="tag">Site Bills</span></div></div>
       <button class="icon-btn" id="settingsShortcut">⚙</button>
     </header>
+
+    <div class="mode-toggle">
+      <button class="mode-btn active" id="modePurchasesBtn" data-mode="purchases">🛒 Purchases</button>
+      <button class="mode-btn" id="modeSalesBtn" data-mode="sales">💰 Sales</button>
+    </div>
 
     <section class="totals-card">
       <div class="tab-row">
@@ -257,17 +268,35 @@
   <!-- REPORTS -->
   <div class="view" id="view-reports">
     <header><h2>Reports</h2></header>
-    <p class="help-text">Choose a month to generate a printable report — full bill list with a summary you can save as PDF or print.</p>
-    <div class="field">
-      <label for="reportTabSelect">Month</label>
-      <select id="reportTabSelect"></select>
-    </div>
-    <button class="btn btn-primary" style="width:100%;" id="generateReportBtn">Generate Report</button>
-    <div class="status-msg" id="reportStatus"></div>
 
-    <div id="reportPreviewWrap" style="display:none;margin-top:20px;">
-      <div id="reportContent"></div>
-      <button class="add-btn" id="printReportBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
+    <div class="mode-toggle" style="margin-bottom:16px;">
+      <button class="mode-btn active" id="reportModeMonthlyBtn">Monthly Report</button>
+      <button class="mode-btn" id="reportModeVatBtn">VAT Comparison</button>
+    </div>
+
+    <div id="monthlyReportSection">
+      <p class="help-text">Choose a month to generate a printable report — full bill list with a summary you can save as PDF or print.</p>
+      <div class="field">
+        <label for="reportTabSelect">Month</label>
+        <select id="reportTabSelect"></select>
+      </div>
+      <button class="btn btn-primary" style="width:100%;" id="generateReportBtn">Generate Report</button>
+      <div class="status-msg" id="reportStatus"></div>
+
+      <div id="reportPreviewWrap" style="display:none;margin-top:20px;">
+        <div id="reportContent"></div>
+        <button class="add-btn" id="printReportBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
+      </div>
+    </div>
+
+    <div id="vatComparisonSection" style="display:none;">
+      <p class="help-text">Input VAT (what you paid on Purchases) vs Output VAT (what you collected on Sales), month by month — matches each Purchases tab with its SALES- counterpart.</p>
+      <button class="btn btn-primary" style="width:100%;" id="loadVatComparisonBtn">Load VAT Comparison</button>
+      <div class="status-msg" id="vatStatus"></div>
+      <div id="vatComparisonWrap" style="display:none;margin-top:20px;">
+        <div id="vatComparisonContent"></div>
+        <button class="add-btn" id="printVatBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
+      </div>
     </div>
   </div>
 
@@ -354,13 +383,13 @@
         <input type="date" id="fDate">
       </div>
       <div class="field">
-        <label for="fBillNo">Bill No</label>
+        <label for="fBillNo" id="fBillNoLabel">Bill No</label>
         <input type="text" id="fBillNo" placeholder="optional">
       </div>
     </div>
     <div class="row2">
       <div class="field">
-        <label for="fVendor">Vendor</label>
+        <label for="fVendor" id="fVendorLabel">Vendor</label>
         <input type="text" id="fVendor" list="vendorList" placeholder="e.g. ALKARRAR TRADING">
         <datalist id="vendorList"></datalist>
       </div>
@@ -439,12 +468,15 @@
 </div>
 
 <script>
-const LS_KEYS = { url:'sb_script_url', tabs:'sb_tabs', entries:'sb_entries', activeTab:'sb_active_tab', pin:'sb_pin' };
+const LS_KEYS = { url:'sb_script_url', tabs:'sb_tabs', entries:'sb_entries', activeTab:'sb_active_tab', pin:'sb_pin', mode:'sb_mode', activeTabSales:'sb_active_tab_sales' };
+const SALES_PREFIX = 'SALES-';
 
 let scriptUrl = localStorage.getItem(LS_KEYS.url) || '';
 let tabs = JSON.parse(localStorage.getItem(LS_KEYS.tabs) || '[]');
 let entries = JSON.parse(localStorage.getItem(LS_KEYS.entries) || '[]');
+let mode = localStorage.getItem(LS_KEYS.mode) || 'purchases'; // 'purchases' | 'sales'
 let activeTab = localStorage.getItem(LS_KEYS.activeTab) || '';
+let activeTabSales = localStorage.getItem(LS_KEYS.activeTabSales) || '';
 let capturedPhotos = []; // [{base64, previewUrl}, ...] — supports multi-page bills
 let currentDetailEntry = null;
 let editingEntry = null;
@@ -600,27 +632,58 @@ function switchView(name){
   document.querySelector(`.nav-btn[data-view="${name}"]`).classList.add('active');
   if (name === 'history') loadHistoryData();
   if (name === 'reports'){
-    $('reportTabSelect').innerHTML = tabs.map(t => `<option value="${t}">${t}</option>`).join('');
+    $('reportTabSelect').innerHTML = getModeTabs().map(t => `<option value="${t}">${tabDisplayName(t)}</option>`).join('');
     if (activeTab) $('reportTabSelect').value = activeTab;
   }
 }
 $('settingsShortcut').onclick = () => switchView('settings');
 
 /* ---------------- RENDER ---------------- */
+function isSalesTab(t){ return String(t).indexOf(SALES_PREFIX) === 0; }
+function getModeTabs(){ return tabs.filter(t => mode === 'sales' ? isSalesTab(t) : !isSalesTab(t)); }
+function tabDisplayName(t){ return isSalesTab(t) ? t.slice(SALES_PREFIX.length) : t; }
+
+function updateModeUI(){
+  $('modePurchasesBtn').classList.toggle('active', mode === 'purchases');
+  $('modeSalesBtn').classList.toggle('active', mode === 'sales');
+  const isSales = mode === 'sales';
+  $('fVendorLabel').textContent = isSales ? 'Client / Company Name' : 'Vendor';
+  $('fBillNoLabel').textContent = isSales ? 'Invoice No' : 'Bill No';
+  $('fVendor').placeholder = isSales ? 'e.g. ABC Trading Co.' : 'e.g. ALKARRAR TRADING';
+  $('addBillBtn').textContent = isSales ? '+ Add Sale' : '+ Add Bill';
+  $('billModalTitle').textContent = editingEntry ? 'Edit Entry' : (isSales ? 'Add Sale' : 'Add Bill');
+}
+
+function switchMode(newMode){
+  if (newMode === mode) return;
+  if (mode === 'sales'){ activeTabSales = activeTab; localStorage.setItem(LS_KEYS.activeTabSales, activeTabSales); }
+  else { localStorage.setItem(LS_KEYS.activeTab, activeTab); }
+
+  mode = newMode;
+  localStorage.setItem(LS_KEYS.mode, mode);
+  activeTab = (mode === 'sales' ? activeTabSales : localStorage.getItem(LS_KEYS.activeTab)) || '';
+
+  updateModeUI();
+  render();
+  refreshHome();
+}
+$('modePurchasesBtn').onclick = () => switchMode('purchases');
+$('modeSalesBtn').onclick = () => switchMode('sales');
+
 function populateTabSelects(){
+  const modeTabs = getModeTabs();
   [$('activeTab'), $('fTab')].forEach(sel => {
     sel.innerHTML = '';
-    tabs.forEach(t => {
-      const o = document.createElement('option'); o.value = t; o.textContent = t;
-      sel.appendChild(o);
-    });
+    modeTabs.forEach(t => sel.appendChild(new Option(tabDisplayName(t), t)));
   });
   $('historyTabFilter').innerHTML = '<option value="__all">All tabs</option>' +
-    tabs.map(t => `<option value="${t}">${t}</option>`).join('');
-  if (tabs.length){
-    if (!activeTab || !tabs.includes(activeTab)) activeTab = tabs[0];
+    modeTabs.map(t => `<option value="${t}">${tabDisplayName(t)}</option>`).join('');
+  if (modeTabs.length){
+    if (!activeTab || !modeTabs.includes(activeTab)) activeTab = modeTabs[0];
     $('activeTab').value = activeTab;
     $('fTab').value = activeTab;
+  } else {
+    activeTab = '';
   }
 }
 
@@ -843,19 +906,25 @@ $('fixDatesBtn').onclick = async () => {
 };
 
 $('createTabBtn').onclick = async () => {
-  let name = $('newTabName').value.trim();
-  if (!name){ setStatus('tabStatus','Enter a tab name first','err'); return; }
+  let rawName = $('newTabName').value.trim();
+  if (!rawName){ setStatus('tabStatus','Enter a tab name first','err'); return; }
   if (!scriptUrl){ setStatus('tabStatus','Connect to your sheet first','err'); return; }
 
-  const info = parseTabMonthYear(name);
+  // Strip any SALES- the person might have typed themselves — it gets re-added based on the current mode
+  const core = rawName.indexOf(SALES_PREFIX) === 0 ? rawName.slice(SALES_PREFIX.length) : rawName;
+  let name = mode === 'sales' ? SALES_PREFIX + core : core;
+
+  const info = parseTabMonthYear(core);
   if (info){
-    const canonical = MONTH_NAMES[info.month-1].toUpperCase() + '-' + info.year;
+    const canonicalCore = MONTH_NAMES[info.month-1].toUpperCase() + '-' + info.year;
+    const canonical = mode === 'sales' ? SALES_PREFIX + canonicalCore : canonicalCore;
     if (canonical !== name){
       const useCanonical = confirm(`To keep all your month tabs in the same style, this will be named "${canonical}" (matching your other tabs) instead of "${name}".\n\nTap OK to use "${canonical}", or Cancel to keep "${name}" exactly as you typed it.`);
       if (useCanonical) name = canonical;
     }
   } else {
-    const proceed = confirm(`"${name}" doesn't look like a standard month tab (e.g. MARCH-2026). Bills added here won't get the date-mismatch check.\n\nCreate it anyway?`);
+    const example = mode === 'sales' ? 'SALES-MARCH-2026' : 'MARCH-2026';
+    const proceed = confirm(`"${name}" doesn't look like a standard month tab (e.g. ${example}). Bills added here won't get the date-mismatch check.\n\nCreate it anyway?`);
     if (!proceed) return;
   }
 
@@ -884,7 +953,7 @@ function ddmmyyyyToIso(str){
 
 function openEditForBill(entry){
   editingEntry = entry;
-  $('billModalTitle').textContent = 'Edit Bill';
+  $('billModalTitle').textContent = mode === 'sales' ? 'Edit Sale' : 'Edit Bill';
   $('submitBillBtn').textContent = 'Save Changes';
   $('fTab').value = entry.tab;
   $('fDate').value = ddmmyyyyToIso(entry.date);
@@ -916,7 +985,7 @@ $('editDetailBtn').onclick = () => {
 $('addBillBtn').onclick = () => {
   if (!scriptUrl){ switchView('settings'); return; }
   editingEntry = null;
-  $('billModalTitle').textContent = 'Add Bill';
+  $('billModalTitle').textContent = mode === 'sales' ? 'Add Sale' : 'Add Bill';
   $('fBillNo').value=''; $('fVendor').value=''; $('fCategory').value=''; $('fAmount').value=''; $('fVat').value=''; $('fNote').value='';
   $('computedTotal').textContent='0.000';
   $('computedBreakdown').textContent='Amount 0.000 · VAT 0.000';
@@ -1331,12 +1400,12 @@ function renderReport(tab, rows){
         <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
       </div>
     </div>
-    <div class="report-title">Site Expense Report — ${escapeHtml(tab)}</div>
+    <div class="report-title">${isSalesTab(tab) ? 'Sales Report' : 'Site Expense Report'} — ${escapeHtml(tabDisplayName(tab))}</div>
     <div class="report-meta">Generated ${genDate} · ${sorted.length} bill${sorted.length===1?'':'s'} · sorted by date</div>
     <div class="report-table-wrap">
     <table class="report-table">
       <thead>
-        <tr><th>S/N</th><th>Date</th><th>Bill No</th><th>Vendor</th><th>Note</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">Total</th></tr>
+        <tr><th>S/N</th><th>Date</th><th>${isSalesTab(tab) ? 'Invoice No' : 'Bill No'}</th><th>${isSalesTab(tab) ? 'Client' : 'Vendor'}</th><th>Note</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">Total</th></tr>
       </thead>
       <tbody>
         ${sorted.map((r,idx) => `<tr>
@@ -1363,6 +1432,95 @@ function renderReport(tab, rows){
 }
 
 $('printReportBtn').onclick = () => window.print();
+
+/* ---------------- VAT COMPARISON ---------------- */
+$('reportModeMonthlyBtn').onclick = () => {
+  $('reportModeMonthlyBtn').classList.add('active');
+  $('reportModeVatBtn').classList.remove('active');
+  $('monthlyReportSection').style.display = 'block';
+  $('vatComparisonSection').style.display = 'none';
+};
+$('reportModeVatBtn').onclick = () => {
+  $('reportModeVatBtn').classList.add('active');
+  $('reportModeMonthlyBtn').classList.remove('active');
+  $('vatComparisonSection').style.display = 'block';
+  $('monthlyReportSection').style.display = 'none';
+};
+
+$('loadVatComparisonBtn').onclick = async () => {
+  if (!scriptUrl){ setStatus('vatStatus','Connect to your sheet first (Settings)','err'); return; }
+  setStatus('vatStatus','Loading VAT data from every month…','');
+  $('vatComparisonWrap').style.display = 'none';
+  $('loadVatComparisonBtn').disabled = true;
+  try {
+    const res = await fetchWithTimeout(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'getVatComparison' })
+    }, 30000);
+    const data = await res.json();
+    if (!data.ok){ setStatus('vatStatus', data.error || 'Failed to load VAT comparison','err'); return; }
+    renderVatComparison(data.months || []);
+    setStatus('vatStatus','','');
+  } catch(err){ setStatus('vatStatus','Could not reach your sheet — check connection','err'); }
+  finally { $('loadVatComparisonBtn').disabled = false; }
+};
+
+function renderVatComparison(months){
+  const sorted = months.slice().sort((a,b) => parseReportDate('01/' + monthNameToNum(a.month) + '/' + extractYear(a.month)) - parseReportDate('01/' + monthNameToNum(b.month) + '/' + extractYear(b.month)));
+  const totalInput = sorted.reduce((s,m)=>s+(parseFloat(m.inputVat)||0),0);
+  const totalOutput = sorted.reduce((s,m)=>s+(parseFloat(m.outputVat)||0),0);
+  const totalNet = totalOutput - totalInput;
+  const genDate = new Date().toLocaleString();
+
+  $('vatComparisonContent').innerHTML = `
+    <div class="report-header">
+      <img src="logo.png" alt="MYM Constructions">
+      <div>
+        <div class="report-company-name">MYM CONSTRUCTIONS</div>
+        <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
+      </div>
+    </div>
+    <div class="report-title">VAT Comparison — Input vs Output</div>
+    <div class="report-meta">Generated ${genDate} · ${sorted.length} month${sorted.length===1?'':'s'} with data</div>
+    <div class="report-table-wrap">
+    <table class="report-table" style="min-width:560px;">
+      <thead>
+        <tr><th style="width:20%;">Month</th><th class="num" style="width:20%;">Input VAT<br>(Purchases)</th><th class="num" style="width:20%;">Output VAT<br>(Sales)</th><th class="num" style="width:20%;">Net VAT</th><th style="width:20%;">Status</th></tr>
+      </thead>
+      <tbody>
+        ${sorted.map(m => {
+          const net = m.outputVat - m.inputVat;
+          const owe = net >= 0;
+          return `<tr>
+            <td>${escapeHtml(m.month)}</td>
+            <td class="num">${(parseFloat(m.inputVat)||0).toFixed(3)}</td>
+            <td class="num">${(parseFloat(m.outputVat)||0).toFixed(3)}</td>
+            <td class="num">${net.toFixed(3)}</td>
+            <td>${owe ? 'Payable' : 'Refundable'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+    <div class="report-totals" style="width:300px;">
+      <div><span>Total Input VAT (Purchases)</span><span>${totalInput.toFixed(3)}</span></div>
+      <div><span>Total Output VAT (Sales)</span><span>${totalOutput.toFixed(3)}</span></div>
+      <div class="grand"><span>Net VAT ${totalNet >= 0 ? 'Payable' : 'Refundable'}</span><span>${Math.abs(totalNet).toFixed(3)}</span></div>
+    </div>
+  `;
+  $('vatComparisonWrap').style.display = 'block';
+}
+
+function monthNameToNum(tabName){
+  const info = parseTabMonthYear(tabName);
+  return info ? String(info.month).padStart(2,'0') : '01';
+}
+function extractYear(tabName){
+  const m = String(tabName).match(/\d{4}/);
+  return m ? m[0] : '2000';
+}
+
+$('printVatBtn').onclick = () => window.print();
 
 /* Pulls real bill data for one tab from the Sheet — shared source of truth for Home AND History */
 async function fetchTabFromSheet(tab){
@@ -1449,6 +1607,7 @@ $('activeTab').onchange = (e) => { activeTab = e.target.value; localStorage.setI
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(()=>{});
 buildPinPad();
 startUnlock();
+updateModeUI();
 populateVendorDatalist();
 if (scriptUrl && tabs.length){ render(); refreshHome(); }
 else if (scriptUrl){
