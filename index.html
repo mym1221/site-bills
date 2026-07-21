@@ -38,6 +38,10 @@
   .mode-toggle{display:flex;background:var(--panel);border-radius:12px;padding:4px;margin-bottom:14px;border:1px solid #333c47;}
   .mode-btn{flex:1;background:none;border:none;color:var(--muted);padding:10px 6px;border-radius:9px;font-family:'Oswald',sans-serif;font-weight:600;font-size:13px;letter-spacing:.02em;cursor:pointer;}
   .mode-btn.active{background:var(--accent);color:#1c1200;}
+  .vat-month-check{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #333c47;}
+  .vat-month-check input{width:18px;height:18px;flex-shrink:0;accent-color:var(--accent);}
+  .vat-month-check label{font-size:14px;color:#eef1f4;}
+  .vat-month-check .vat-vals{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-align:right;}
 
   .totals-card{background:var(--panel);border-radius:16px;padding:18px 20px;border:1px solid #333c47;}
   .tab-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
@@ -291,8 +295,18 @@
 
     <div id="vatComparisonSection" style="display:none;">
       <p class="help-text">Input VAT (what you paid on Purchases) vs Output VAT (what you collected on Sales), month by month — matches each Purchases tab with its SALES- counterpart.</p>
-      <button class="btn btn-primary" style="width:100%;" id="loadVatComparisonBtn">Load VAT Comparison</button>
+      <button class="btn btn-primary" style="width:100%;" id="loadVatComparisonBtn">Load Available Months</button>
       <div class="status-msg" id="vatStatus"></div>
+
+      <div id="vatMonthPicker" style="display:none;margin-top:16px;">
+        <div class="sect-row" style="margin-bottom:8px;">
+          <span class="section-label" style="margin:0;">Select months to compare</span>
+          <a href="#" id="vatSelectAllLink" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600;">Select all</a>
+        </div>
+        <div id="vatMonthCheckboxes"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px;" id="showVatComparisonBtn">Show Comparison</button>
+      </div>
+
       <div id="vatComparisonWrap" style="display:none;margin-top:20px;">
         <div id="vatComparisonContent"></div>
         <button class="add-btn" id="printVatBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
@@ -1447,9 +1461,12 @@ $('reportModeVatBtn').onclick = () => {
   $('monthlyReportSection').style.display = 'none';
 };
 
+let vatMonthsData = [];
+
 $('loadVatComparisonBtn').onclick = async () => {
   if (!scriptUrl){ setStatus('vatStatus','Connect to your sheet first (Settings)','err'); return; }
-  setStatus('vatStatus','Loading VAT data from every month…','');
+  setStatus('vatStatus','Loading available months…','');
+  $('vatMonthPicker').style.display = 'none';
   $('vatComparisonWrap').style.display = 'none';
   $('loadVatComparisonBtn').disabled = true;
   try {
@@ -1459,14 +1476,44 @@ $('loadVatComparisonBtn').onclick = async () => {
     }, 30000);
     const data = await res.json();
     if (!data.ok){ setStatus('vatStatus', data.error || 'Failed to load VAT comparison','err'); return; }
-    renderVatComparison(data.months || []);
+    vatMonthsData = (data.months || []).sort((a,b) =>
+      parseReportDate('01/' + monthNameToNum(a.month) + '/' + extractYear(a.month)) -
+      parseReportDate('01/' + monthNameToNum(b.month) + '/' + extractYear(b.month))
+    );
+    if (!vatMonthsData.length){ setStatus('vatStatus','No Purchases or Sales data found in any month yet.','err'); return; }
+    renderVatMonthPicker();
     setStatus('vatStatus','','');
   } catch(err){ setStatus('vatStatus','Could not reach your sheet — check connection','err'); }
   finally { $('loadVatComparisonBtn').disabled = false; }
 };
 
-function renderVatComparison(months){
-  const sorted = months.slice().sort((a,b) => parseReportDate('01/' + monthNameToNum(a.month) + '/' + extractYear(a.month)) - parseReportDate('01/' + monthNameToNum(b.month) + '/' + extractYear(b.month)));
+function renderVatMonthPicker(){
+  $('vatMonthCheckboxes').innerHTML = vatMonthsData.map((m,i) => `
+    <div class="vat-month-check">
+      <input type="checkbox" id="vatMonth${i}" checked data-idx="${i}">
+      <label for="vatMonth${i}">${escapeHtml(m.month)}</label>
+      <span class="vat-vals">In ${(m.inputVat||0).toFixed(3)} · Out ${(m.outputVat||0).toFixed(3)}</span>
+    </div>
+  `).join('');
+  $('vatMonthPicker').style.display = 'block';
+}
+
+$('vatSelectAllLink').onclick = (e) => {
+  e.preventDefault();
+  const boxes = $('vatMonthCheckboxes').querySelectorAll('input[type=checkbox]');
+  const allChecked = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => b.checked = !allChecked);
+  $('vatSelectAllLink').textContent = allChecked ? 'Select all' : 'Deselect all';
+};
+
+$('showVatComparisonBtn').onclick = () => {
+  const boxes = Array.from($('vatMonthCheckboxes').querySelectorAll('input[type=checkbox]'));
+  const selected = boxes.filter(b => b.checked).map(b => vatMonthsData[parseInt(b.dataset.idx)]);
+  if (!selected.length){ setStatus('vatStatus','Select at least one month first','err'); return; }
+  renderVatComparison(selected);
+};
+
+function renderVatComparison(sorted){
   const totalInput = sorted.reduce((s,m)=>s+(parseFloat(m.inputVat)||0),0);
   const totalOutput = sorted.reduce((s,m)=>s+(parseFloat(m.outputVat)||0),0);
   const totalNet = totalOutput - totalInput;
@@ -1481,7 +1528,7 @@ function renderVatComparison(months){
       </div>
     </div>
     <div class="report-title">VAT Comparison — Input vs Output</div>
-    <div class="report-meta">Generated ${genDate} · ${sorted.length} month${sorted.length===1?'':'s'} with data</div>
+    <div class="report-meta">Generated ${genDate} · ${sorted.length} month${sorted.length===1?'':'s'} selected</div>
     <div class="report-table-wrap">
     <table class="report-table" style="min-width:560px;">
       <thead>
@@ -1490,13 +1537,12 @@ function renderVatComparison(months){
       <tbody>
         ${sorted.map(m => {
           const net = m.outputVat - m.inputVat;
-          const owe = net >= 0;
           return `<tr>
             <td>${escapeHtml(m.month)}</td>
             <td class="num">${(parseFloat(m.inputVat)||0).toFixed(3)}</td>
             <td class="num">${(parseFloat(m.outputVat)||0).toFixed(3)}</td>
             <td class="num">${net.toFixed(3)}</td>
-            <td>${owe ? 'Payable' : 'Refundable'}</td>
+            <td>Payable</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -1505,7 +1551,7 @@ function renderVatComparison(months){
     <div class="report-totals" style="width:300px;">
       <div><span>Total Input VAT (Purchases)</span><span>${totalInput.toFixed(3)}</span></div>
       <div><span>Total Output VAT (Sales)</span><span>${totalOutput.toFixed(3)}</span></div>
-      <div class="grand"><span>Net VAT ${totalNet >= 0 ? 'Payable' : 'Refundable'}</span><span>${Math.abs(totalNet).toFixed(3)}</span></div>
+      <div class="grand"><span>Net VAT Payable</span><span>${totalNet.toFixed(3)}</span></div>
     </div>
   `;
   $('vatComparisonWrap').style.display = 'block';
