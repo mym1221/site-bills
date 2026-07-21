@@ -39,6 +39,9 @@
   .mode-btn{flex:1;background:none;border:none;color:var(--muted);padding:10px 6px;border-radius:9px;font-family:'Oswald',sans-serif;font-weight:600;font-size:13px;letter-spacing:.02em;cursor:pointer;}
   .mode-btn.active{background:var(--accent);color:#1c1200;}
   .vat-month-check{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #333c47;}
+  .petty-member-row{display:flex;align-items:center;justify-content:space-between;padding:10px 2px;border-bottom:1px solid #333c47;}
+  .petty-member-row span{font-size:14px;color:#eef1f4;}
+  .petty-member-row button{background:none;border:1px solid #5a3535;color:var(--red);border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;}
   .vat-month-check input{width:18px;height:18px;flex-shrink:0;accent-color:var(--accent);}
   .vat-month-check label{font-size:14px;color:#eef1f4;}
   .vat-month-check .vat-vals{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-align:right;}
@@ -171,17 +174,20 @@
     @page{ size: A4; margin: 12mm; }
     body{background:#fff;}
     #app{max-width:none;padding:0;}
-    .bottom-nav, header, #printReportBtn, #printVatBtn{display:none !important;}
+    .bottom-nav, header, #printReportBtn, #printVatBtn, #printPettyLedgerBtn{display:none !important;}
     .view:not(#view-reports){display:none !important;}
     #view-reports > header, #view-reports > .mode-toggle{display:none !important;}
     #monthlyReportSection > *:not(#reportPreviewWrap){display:none !important;}
     #vatComparisonSection > *:not(#vatComparisonWrap){display:none !important;}
-    #reportPreviewWrap, #vatComparisonWrap{margin:0;}
-    #reportContent, #vatComparisonContent{border-radius:0;padding:0;width:100%;}
+    #pettyLedgerSection > *:not(#pettyLedgerWrap){display:none !important;}
+    #reportPreviewWrap, #vatComparisonWrap, #pettyLedgerWrap{margin:0;}
+    #reportContent, #vatComparisonContent, #pettyLedgerContent{border-radius:0;padding:0;width:100%;}
     .report-table-wrap{overflow:visible;}
     .report-table{min-width:0;font-size:9px;}
     .report-table th, .report-table td{padding:4px 5px;}
     .report-table tr{page-break-inside:avoid;}
+    body.printing-voucher > *:not(#voucherPrintArea){display:none !important;}
+    body.printing-voucher #voucherPrintArea{display:block !important;background:#fff;color:#1c2128;padding:0;font-family:'Inter',sans-serif;}
   }
 
   /* PIN lock */
@@ -221,6 +227,7 @@
     <div class="mode-toggle">
       <button class="mode-btn active" id="modePurchasesBtn" data-mode="purchases">🛒 Purchases</button>
       <button class="mode-btn" id="modeSalesBtn" data-mode="sales">💰 Sales</button>
+      <button class="mode-btn" id="modePettyBtn" data-mode="petty">💵 Petty Cash</button>
     </div>
 
     <section class="totals-card">
@@ -276,6 +283,7 @@
     <div class="mode-toggle" style="margin-bottom:16px;">
       <button class="mode-btn active" id="reportModeMonthlyBtn">Monthly Report</button>
       <button class="mode-btn" id="reportModeVatBtn">VAT Comparison</button>
+      <button class="mode-btn" id="reportModePettyBtn">Petty Cash</button>
     </div>
 
     <div id="monthlyReportSection">
@@ -312,6 +320,21 @@
         <button class="add-btn" id="printVatBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
       </div>
     </div>
+
+    <div id="pettyLedgerSection" style="display:none;">
+      <p class="help-text">Cash issued to a member vs bills they've submitted, across every month — tells you exactly how much they still owe or still hold.</p>
+      <div class="field">
+        <label for="pettyLedgerMemberSelect">Member</label>
+        <select id="pettyLedgerMemberSelect"></select>
+      </div>
+      <button class="btn btn-primary" style="width:100%;" id="loadPettyLedgerBtn">Load Ledger</button>
+      <div class="status-msg" id="pettyLedgerStatus"></div>
+
+      <div id="pettyLedgerWrap" style="display:none;margin-top:20px;">
+        <div id="pettyLedgerContent"></div>
+        <button class="add-btn" id="printPettyLedgerBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
+      </div>
+    </div>
   </div>
 
   <!-- SETTINGS -->
@@ -332,6 +355,19 @@
     <div class="settings-block">
       <h3>Sync</h3>
       <button class="btn btn-ghost" style="width:100%;" id="syncNowBtn">Sync Pending Bills</button>
+    </div>
+
+    <div class="settings-block">
+      <h3>Petty Cash Members</h3>
+      <p class="help-text">The people who receive petty cash. Add as many as you need. Used in the Petty Cash mode and the "Paid Via" tag on Purchases bills.</p>
+      <div id="pettyMembersList"></div>
+      <div class="row2" style="margin-top:4px;">
+        <div class="field" style="margin-bottom:0;">
+          <input type="text" id="newPettyMemberInput" placeholder="e.g. Adeel">
+        </div>
+        <button class="btn btn-ghost" id="addPettyMemberBtn" style="flex:0 0 auto;padding:9px 16px;">Add</button>
+      </div>
+      <div class="status-msg" id="pettyMembersStatus"></div>
     </div>
 
     <div class="settings-block">
@@ -382,6 +418,14 @@
       <button class="photo-btn" id="photoCameraBtn">📷 Take Photo</button>
       <button class="photo-btn" id="photoGalleryBtn">🖼 Choose from Gallery</button>
     </div>
+    <button class="photo-btn" id="signatureToggleBtn" style="display:none;width:100%;margin-bottom:9px;">✍️ Or sign on screen instead</button>
+    <div id="signaturePadWrap" style="display:none;margin-bottom:9px;">
+      <canvas id="signatureCanvas" width="600" height="220" style="width:100%;height:130px;background:#fff;border-radius:10px;touch-action:none;display:block;"></canvas>
+      <div class="btn-row" style="margin-top:6px;">
+        <button type="button" class="btn btn-ghost" id="sigClearBtn">Clear</button>
+        <button type="button" class="btn btn-primary" id="sigSaveBtn">Use This Signature</button>
+      </div>
+    </div>
     <input type="file" id="photoCameraInput" accept="image/*" capture="environment" style="display:none;">
     <input type="file" id="photoGalleryInput" accept="image/*" multiple style="display:none;">
     <div class="photo-thumb-strip" id="photoThumbStrip"></div>
@@ -396,16 +440,20 @@
         <label for="fDate">Date</label>
         <input type="date" id="fDate">
       </div>
-      <div class="field">
+      <div class="field" id="fBillNoWrap">
         <label for="fBillNo" id="fBillNoLabel">Bill No</label>
-        <input type="text" id="fBillNo" placeholder="optional">
+        <input type="text" id="fBillNo" list="issuerList" placeholder="optional">
+        <datalist id="issuerList"></datalist>
       </div>
     </div>
     <div class="row2">
       <div class="field">
         <label for="fVendor" id="fVendorLabel">Vendor</label>
-        <input type="text" id="fVendor" list="vendorList" placeholder="e.g. ALKARRAR TRADING">
-        <datalist id="vendorList"></datalist>
+        <div id="fVendorFreeText">
+          <input type="text" id="fVendor" list="vendorList" placeholder="e.g. ALKARRAR TRADING">
+          <datalist id="vendorList"></datalist>
+        </div>
+        <select id="fVendorMemberSelect" style="display:none;"></select>
       </div>
       <div class="field">
         <label for="fCategory">Category</label>
@@ -419,6 +467,10 @@
         </select>
       </div>
     </div>
+    <div class="field" id="paidViaWrap">
+      <label for="fPaidVia">Paid Via</label>
+      <select id="fPaidVia"></select>
+    </div>
     <div class="field">
       <label for="fNote">Note / Description (optional)</label>
       <input type="text" id="fNote" placeholder="e.g. cement for generator room repair">
@@ -428,7 +480,7 @@
         <label for="fAmount" id="fAmountLabel">Amount</label>
         <input type="number" step="0.001" inputmode="decimal" class="mono" id="fAmount" placeholder="0.000">
       </div>
-      <div class="field">
+      <div class="field" id="vatFieldWrap">
         <div class="vat-label-row">
           <label style="margin-bottom:0;">VAT</label>
           <button type="button" class="vat-toggle-chip" id="vatModeToggle">Auto 10%</button>
@@ -436,6 +488,7 @@
         <input type="number" step="0.001" inputmode="decimal" class="mono" id="fVat" placeholder="0.000">
       </div>
     </div>
+    <button class="btn btn-ghost" style="width:100%;margin-bottom:9px;display:none;" id="generateVoucherBtn">🧾 Generate Voucher</button>
     <div class="computed-total">
       <div class="computed-breakdown" id="computedBreakdown">Amount 0.000 · VAT 0.000</div>
       <div class="computed-total-row">
@@ -482,7 +535,7 @@
 </div>
 
 <script>
-const LS_KEYS = { url:'sb_script_url', tabs:'sb_tabs', entries:'sb_entries', activeTab:'sb_active_tab', pin:'sb_pin', mode:'sb_mode', activeTabSales:'sb_active_tab_sales' };
+const LS_KEYS = { url:'sb_script_url', tabs:'sb_tabs', entries:'sb_entries', activeTab:'sb_active_tab', pin:'sb_pin', mode:'sb_mode', activeTabSales:'sb_active_tab_sales', activeTabPetty:'sb_active_tab_petty', pettyMembers:'sb_petty_members' };
 const SALES_PREFIX = 'SALES-';
 
 let scriptUrl = localStorage.getItem(LS_KEYS.url) || '';
@@ -491,6 +544,16 @@ let entries = JSON.parse(localStorage.getItem(LS_KEYS.entries) || '[]');
 let mode = localStorage.getItem(LS_KEYS.mode) || 'purchases'; // 'purchases' | 'sales'
 let activeTab = localStorage.getItem(LS_KEYS.activeTab) || '';
 let activeTabSales = localStorage.getItem(LS_KEYS.activeTabSales) || '';
+let activeTabPetty = localStorage.getItem(LS_KEYS.activeTabPetty) || '';
+let pettyMembers = JSON.parse(localStorage.getItem(LS_KEYS.pettyMembers) || '[]');
+// One-time migration from the old fixed 2-slot storage, if present
+if (!pettyMembers.length){
+  const old1 = localStorage.getItem('sb_petty_m1'), old2 = localStorage.getItem('sb_petty_m2');
+  if (old1) pettyMembers.push(old1);
+  if (old2) pettyMembers.push(old2);
+  if (pettyMembers.length) localStorage.setItem(LS_KEYS.pettyMembers, JSON.stringify(pettyMembers));
+}
+function savePettyMembers(){ localStorage.setItem(LS_KEYS.pettyMembers, JSON.stringify(pettyMembers)); }
 let capturedPhotos = []; // [{base64, previewUrl}, ...] — supports multi-page bills
 let currentDetailEntry = null;
 let editingEntry = null;
@@ -543,6 +606,15 @@ function populateVendorDatalist(){
   });
   const sorted = Array.from(names).sort((a,b) => a.localeCompare(b));
   $('vendorList').innerHTML = sorted.map(n => `<option value="${escapeHtml(n)}">`).join('');
+}
+
+function populateIssuerDatalist(){
+  const names = new Set();
+  [...remoteHistoryEntries, ...entries].forEach(e => {
+    if (isPettyTab(e.tab) && e.billNo && e.billNo.trim()) names.add(e.billNo.trim());
+  });
+  const sorted = Array.from(names).sort((a,b) => a.localeCompare(b));
+  $('issuerList').innerHTML = sorted.map(n => `<option value="${escapeHtml(n)}">`).join('');
 }
 
 /* ---------------- PIN LOCK ---------------- */
@@ -653,29 +725,70 @@ function switchView(name){
 $('settingsShortcut').onclick = () => switchView('settings');
 
 /* ---------------- RENDER ---------------- */
+const PETTY_CASH_PREFIX = 'PETTYCASH-';
 function isSalesTab(t){ return String(t).indexOf(SALES_PREFIX) === 0; }
-function getModeTabs(){ return tabs.filter(t => mode === 'sales' ? isSalesTab(t) : !isSalesTab(t)); }
-function tabDisplayName(t){ return isSalesTab(t) ? t.slice(SALES_PREFIX.length) : t; }
+function isPettyTab(t){ return String(t).indexOf(PETTY_CASH_PREFIX) === 0; }
+function getModeTabs(){
+  if (mode === 'sales') return tabs.filter(isSalesTab);
+  if (mode === 'petty') return tabs.filter(isPettyTab);
+  return tabs.filter(t => !isSalesTab(t) && !isPettyTab(t));
+}
+function tabDisplayName(t){
+  if (isSalesTab(t)) return t.slice(SALES_PREFIX.length);
+  if (isPettyTab(t)) return t.slice(PETTY_CASH_PREFIX.length);
+  return t;
+}
+
+function getVendorValue(){
+  return mode === 'petty' ? $('fVendorMemberSelect').value : $('fVendor').value.trim();
+}
+
+function populatePaidViaOptions(){
+  const sel = $('fPaidVia');
+  if (!sel) return;
+  const opts = ['Company Account'].concat(pettyMembers.map(m => 'Petty Cash - ' + m));
+  sel.innerHTML = opts.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
+}
 
 function updateModeUI(){
   $('modePurchasesBtn').classList.toggle('active', mode === 'purchases');
   $('modeSalesBtn').classList.toggle('active', mode === 'sales');
+  $('modePettyBtn').classList.toggle('active', mode === 'petty');
   const isSales = mode === 'sales';
-  $('fVendorLabel').textContent = isSales ? 'Client / Company Name' : 'Vendor';
+  const isPetty = mode === 'petty';
+
+  $('fVendorLabel').textContent = isPetty ? 'Member' : (isSales ? 'Client / Company Name' : 'Vendor');
   $('fBillNoLabel').textContent = isSales ? 'Invoice No' : 'Bill No';
-  $('fVendor').placeholder = isSales ? 'e.g. ABC Trading Co.' : 'e.g. ALKARRAR TRADING';
-  $('addBillBtn').textContent = isSales ? '+ Add Sale' : '+ Add Bill';
-  $('billModalTitle').textContent = editingEntry ? 'Edit Entry' : (isSales ? 'Add Sale' : 'Add Bill');
+  $('fVendor').placeholder = isPetty ? 'Select member' : (isSales ? 'e.g. ABC Trading Co.' : 'e.g. ALKARRAR TRADING');
+  $('addBillBtn').textContent = isPetty ? '+ Issue / Reconcile' : (isSales ? '+ Add Sale' : '+ Add Bill');
+  $('billModalTitle').textContent = editingEntry ? 'Edit Entry' : (isPetty ? 'Petty Cash' : (isSales ? 'Add Sale' : 'Add Bill'));
+
+  // Petty Cash entries have no VAT and use a Member dropdown instead of free-text Vendor
+  $('fVendorFreeText').style.display = isPetty ? 'none' : 'block';
+  $('fVendorMemberSelect').style.display = isPetty ? 'block' : 'none';
+  $('vatFieldWrap').style.display = isPetty ? 'none' : 'block';
+  $('fBillNoLabel').textContent = isPetty ? 'Issued By' : (isSales ? 'Invoice No' : 'Bill No');
+  $('fBillNo').placeholder = isPetty ? 'e.g. Mubashar' : 'optional';
+  $('paidViaWrap').style.display = (isPetty || isSales) ? 'none' : 'block';
+  $('generateVoucherBtn').style.display = isPetty ? 'block' : 'none';
+  $('signatureToggleBtn').style.display = isPetty ? 'block' : 'none';
+
+  if (isPetty){
+    $('fVendorMemberSelect').innerHTML = pettyMembers.length
+      ? pettyMembers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('')
+      : '<option value="">Add member names in Settings first</option>';
+  }
 }
 
 function switchMode(newMode){
   if (newMode === mode) return;
   if (mode === 'sales'){ activeTabSales = activeTab; localStorage.setItem(LS_KEYS.activeTabSales, activeTabSales); }
+  else if (mode === 'petty'){ activeTabPetty = activeTab; localStorage.setItem(LS_KEYS.activeTabPetty, activeTabPetty); }
   else { localStorage.setItem(LS_KEYS.activeTab, activeTab); }
 
   mode = newMode;
   localStorage.setItem(LS_KEYS.mode, mode);
-  activeTab = (mode === 'sales' ? activeTabSales : localStorage.getItem(LS_KEYS.activeTab)) || '';
+  activeTab = (mode === 'sales' ? activeTabSales : mode === 'petty' ? activeTabPetty : localStorage.getItem(LS_KEYS.activeTab)) || '';
 
   updateModeUI();
   render();
@@ -683,6 +796,7 @@ function switchMode(newMode){
 }
 $('modePurchasesBtn').onclick = () => switchMode('purchases');
 $('modeSalesBtn').onclick = () => switchMode('sales');
+$('modePettyBtn').onclick = () => switchMode('petty');
 
 function populateTabSelects(){
   const modeTabs = getModeTabs();
@@ -881,6 +995,35 @@ $('saveSettingsBtn').onclick = async () => {
 
 $('syncNowBtn').onclick = () => syncPending(true);
 
+function renderPettyMembersList(){
+  $('pettyMembersList').innerHTML = pettyMembers.length
+    ? pettyMembers.map((m,i) => `<div class="petty-member-row"><span>${escapeHtml(m)}</span><button data-idx="${i}">Remove</button></div>`).join('')
+    : '<p class="help-text" style="margin-bottom:0;">No members added yet.</p>';
+  $('pettyMembersList').querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.onclick = () => {
+      const name = pettyMembers[parseInt(btn.dataset.idx)];
+      if (!confirm(`Remove "${name}"? Their past records stay in the Sheet — this only removes them from the dropdowns going forward.`)) return;
+      pettyMembers.splice(parseInt(btn.dataset.idx), 1);
+      savePettyMembers();
+      renderPettyMembersList();
+      populatePaidViaOptions();
+      setStatus('pettyMembersStatus','Removed','ok');
+    };
+  });
+}
+renderPettyMembersList();
+$('addPettyMemberBtn').onclick = () => {
+  const name = $('newPettyMemberInput').value.trim();
+  if (!name){ setStatus('pettyMembersStatus','Enter a name first','err'); return; }
+  if (pettyMembers.includes(name)){ setStatus('pettyMembersStatus','Already added','err'); return; }
+  pettyMembers.push(name);
+  savePettyMembers();
+  renderPettyMembersList();
+  populatePaidViaOptions();
+  $('newPettyMemberInput').value = '';
+  setStatus('pettyMembersStatus','Added','ok');
+};
+
 $('freeSpaceBtn').onclick = () => {
   const before = JSON.stringify(entries).length;
   entries.forEach(e => { if (e.synced){ e.thumb = null; e.photoBase64 = null; e.photosBase64 = null; } });
@@ -924,20 +1067,23 @@ $('createTabBtn').onclick = async () => {
   if (!rawName){ setStatus('tabStatus','Enter a tab name first','err'); return; }
   if (!scriptUrl){ setStatus('tabStatus','Connect to your sheet first','err'); return; }
 
-  // Strip any SALES- the person might have typed themselves — it gets re-added based on the current mode
-  const core = rawName.indexOf(SALES_PREFIX) === 0 ? rawName.slice(SALES_PREFIX.length) : rawName;
-  let name = mode === 'sales' ? SALES_PREFIX + core : core;
+  // Strip any known prefix the person might have typed themselves — it gets re-added based on the current mode
+  let core = rawName;
+  if (core.indexOf(SALES_PREFIX) === 0) core = core.slice(SALES_PREFIX.length);
+  else if (core.indexOf(PETTY_CASH_PREFIX) === 0) core = core.slice(PETTY_CASH_PREFIX.length);
+  const prefix = mode === 'sales' ? SALES_PREFIX : (mode === 'petty' ? PETTY_CASH_PREFIX : '');
+  let name = prefix + core;
 
   const info = parseTabMonthYear(core);
   if (info){
     const canonicalCore = MONTH_NAMES[info.month-1].toUpperCase() + '-' + info.year;
-    const canonical = mode === 'sales' ? SALES_PREFIX + canonicalCore : canonicalCore;
+    const canonical = prefix + canonicalCore;
     if (canonical !== name){
       const useCanonical = confirm(`To keep all your month tabs in the same style, this will be named "${canonical}" (matching your other tabs) instead of "${name}".\n\nTap OK to use "${canonical}", or Cancel to keep "${name}" exactly as you typed it.`);
       if (useCanonical) name = canonical;
     }
   } else {
-    const example = mode === 'sales' ? 'SALES-MARCH-2026' : 'MARCH-2026';
+    const example = mode === 'sales' ? 'SALES-MARCH-2026' : (mode === 'petty' ? 'PETTYCASH-MARCH-2026' : 'MARCH-2026');
     const proceed = confirm(`"${name}" doesn't look like a standard month tab (e.g. ${example}). Bills added here won't get the date-mismatch check.\n\nCreate it anyway?`);
     if (!proceed) return;
   }
@@ -967,12 +1113,15 @@ function ddmmyyyyToIso(str){
 
 function openEditForBill(entry){
   editingEntry = entry;
-  $('billModalTitle').textContent = mode === 'sales' ? 'Edit Sale' : 'Edit Bill';
+  updateModeUI();
+  $('billModalTitle').textContent = mode === 'petty' ? 'Edit Petty Cash' : (mode === 'sales' ? 'Edit Sale' : 'Edit Bill');
   $('submitBillBtn').textContent = 'Save Changes';
   $('fTab').value = entry.tab;
   $('fDate').value = ddmmyyyyToIso(entry.date);
   $('fBillNo').value = entry.billNo || '';
   $('fVendor').value = entry.vendor || '';
+  $('fVendorMemberSelect').value = entry.vendor || '';
+  $('fPaidVia').value = entry.paidVia || 'Company Account';
   $('fCategory').value = '';
   $('fNote').value = entry.note || '';
   $('fAmount').value = entry.amount || '';
@@ -987,6 +1136,7 @@ function openEditForBill(entry){
   isSubmitting = false;
   $('submitBillBtn').disabled = false;
   $('saveAddAnotherBtn').style.display = 'none'; // doesn't make sense mid-edit
+  $('generateVoucherBtn').style.display = 'none'; // edits don't re-generate a voucher
   $('billModal').classList.remove('hidden');
 }
 
@@ -999,8 +1149,7 @@ $('editDetailBtn').onclick = () => {
 $('addBillBtn').onclick = () => {
   if (!scriptUrl){ switchView('settings'); return; }
   editingEntry = null;
-  $('billModalTitle').textContent = mode === 'sales' ? 'Add Sale' : 'Add Bill';
-  $('fBillNo').value=''; $('fVendor').value=''; $('fCategory').value=''; $('fAmount').value=''; $('fVat').value=''; $('fNote').value='';
+  $('fBillNo').value=''; $('fVendor').value=''; $('fVendorMemberSelect').value=''; $('fCategory').value=''; $('fAmount').value=''; $('fVat').value=''; $('fNote').value='';
   $('computedTotal').textContent='0.000';
   $('computedBreakdown').textContent='Amount 0.000 · VAT 0.000';
   $('billStatus').textContent='';
@@ -1010,11 +1159,16 @@ $('addBillBtn').onclick = () => {
   $('fTab').value = activeTab;
   $('fDate').value = suggestDateForTab(activeTab);
   setVatMode('manual');
+  populatePaidViaOptions();
+  $('fPaidVia').value = 'Company Account';
+  $('signaturePadWrap').style.display = 'none';
+  $('signatureToggleBtn').textContent = '✍️ Or sign on screen instead';
+  updateModeUI();
   skipDuplicateCheck = false;
   isSubmitting = false;
   $('submitBillBtn').disabled = false;
   $('submitBillBtn').textContent = 'Save Bill';
-  $('saveAddAnotherBtn').style.display = 'block';
+  $('saveAddAnotherBtn').style.display = mode === 'petty' ? 'none' : 'block';
   $('billModal').classList.remove('hidden');
   setTimeout(() => $('photoCameraBtn').focus(), 50);
   if (!remoteFetchedTabs.has(activeTab)) fetchTabFromSheet(activeTab);
@@ -1101,6 +1255,10 @@ $('vatModeToggle').onclick = () => {
 function getBillBreakdown(){
   const raw = parseFloat($('fAmount').value) || 0;
   const round3 = (n) => Math.round((n + Number.EPSILON) * 1000) / 1000;
+  if (mode === 'petty'){
+    const amount = round3(raw);
+    return { amount, vat: 0, total: amount };
+  }
   if (vatMode === 'reverse'){
     const total = round3(raw);
     const amount = round3(total / (1 + VAT_RATE/100));
@@ -1180,6 +1338,10 @@ async function performSaveBill(keepOpenForNext){
   const amount = parseFloat($('fAmount').value)||0;
   const billNo = $('fBillNo').value.trim();
   if (!date || !amount){ setStatus('billStatus','Date and amount are required','err'); return false; }
+  if (mode === 'petty'){
+    if (!$('fVendorMemberSelect').value){ setStatus('billStatus','Select a member first','err'); return false; }
+    if (!billNo){ setStatus('billStatus','Enter who is issuing the cash (Issued By)','err'); return false; }
+  }
 
   const tabInfo = parseTabMonthYear(tab);
   if (tabInfo){
@@ -1205,7 +1367,7 @@ async function performSaveBill(keepOpenForNext){
     setStatus('billStatus','','');
     let success = false;
     try {
-      const vendor = $('fVendor').value.trim();
+      const vendor = getVendorValue();
       const noteVal = $('fNote').value.trim() || $('fCategory').value;
       const breakdown = getBillBreakdown();
 
@@ -1214,10 +1376,11 @@ async function performSaveBill(keepOpenForNext){
           setStatus('billStatus','You need to be online to save changes to a synced bill.','err');
           return false;
         }
+        const paidVia = mode === 'purchases' ? $('fPaidVia').value : '';
         const payload = {
           action:'update', tab: editingEntry.tab, sn: editingEntry.sn,
           date, billNo, vendor, amount: breakdown.amount, vat: breakdown.vat,
-          note: noteVal, photosBase64: capturedPhotos.map(p => p.base64),
+          note: noteVal, paidVia, photosBase64: capturedPhotos.map(p => p.base64),
           existingPhotoUrl: editingExistingPhotoUrl
         };
         const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) }, 60000);
@@ -1229,7 +1392,7 @@ async function performSaveBill(keepOpenForNext){
         const ddmmyyyy = date.split('-').reverse().join('/');
         const finalPhotoUrl = data.photoUrl || editingExistingPhotoUrl;
         const updated = {
-          ...editingEntry, tab, date: ddmmyyyy, billNo, vendor, note: noteVal,
+          ...editingEntry, tab, date: ddmmyyyy, billNo, vendor, note: noteVal, paidVia,
           amount: breakdown.amount, vat: breakdown.vat, total: breakdown.total,
           photoUrl: finalPhotoUrl,
           thumb: capturedPhotos.length ? capturedPhotos[0].previewUrl : (finalPhotoUrl ? null : editingEntry.thumb)
@@ -1307,7 +1470,8 @@ async function performSaveBill(keepOpenForNext){
 
   let success = false;
   try {
-    const vendor = $('fVendor').value.trim();
+    const vendor = getVendorValue();
+    const paidVia = mode === 'purchases' ? $('fPaidVia').value : '';
     const breakdown = getBillBreakdown();
     const entry = {
       id:'e'+Date.now(), tab, date, billNo, vendor,
@@ -1315,14 +1479,19 @@ async function performSaveBill(keepOpenForNext){
       vat: breakdown.vat,
       total: breakdown.total,
       note: $('fNote').value.trim() || $('fCategory').value,
+      paidVia,
       photosBase64: capturedPhotos.map(p => p.base64),
       thumb: capturedPhotos.length ? capturedPhotos[0].previewUrl : null,
       synced:false, sn:null, createdAt:Date.now()
     };
     entries.push(entry); saveEntries();
-    activeTab = tab; localStorage.setItem(LS_KEYS.activeTab, activeTab);
+    activeTab = tab;
+    if (mode === 'sales'){ activeTabSales = tab; localStorage.setItem(LS_KEYS.activeTabSales, tab); }
+    else if (mode === 'petty'){ activeTabPetty = tab; localStorage.setItem(LS_KEYS.activeTabPetty, tab); }
+    else localStorage.setItem(LS_KEYS.activeTab, tab);
     render();
     populateVendorDatalist();
+    populateIssuerDatalist();
     syncPending(false);
     success = true;
   } catch(err){
@@ -1349,7 +1518,7 @@ $('saveAddAnotherBtn').onclick = async () => {
   if (ok){
     // Reset the form for the next bill, keep the same tab, don't close the modal.
     const tab = $('fTab').value;
-    $('fBillNo').value=''; $('fVendor').value=''; $('fCategory').value=''; $('fAmount').value=''; $('fVat').value=''; $('fNote').value='';
+    $('fBillNo').value=''; $('fVendor').value=''; $('fVendorMemberSelect').value=''; $('fCategory').value=''; $('fAmount').value=''; $('fVat').value=''; $('fNote').value='';
     $('computedTotal').textContent='0.000';
     $('computedBreakdown').textContent='Amount 0.000 · VAT 0.000';
     capturedPhotos = []; renderPhotoThumbs();
@@ -1447,19 +1616,19 @@ function renderReport(tab, rows){
 
 $('printReportBtn').onclick = () => window.print();
 
+/* ---------------- REPORT MODE TOGGLE (3-way) ---------------- */
+function showReportSection(which){
+  const btns = { monthly:$('reportModeMonthlyBtn'), vat:$('reportModeVatBtn'), petty:$('reportModePettyBtn') };
+  const sections = { monthly:$('monthlyReportSection'), vat:$('vatComparisonSection'), petty:$('pettyLedgerSection') };
+  Object.keys(btns).forEach(k => btns[k].classList.toggle('active', k === which));
+  Object.keys(sections).forEach(k => sections[k].style.display = k === which ? 'block' : 'none');
+  if (which === 'petty') populatePettyLedgerMemberSelect();
+}
+$('reportModeMonthlyBtn').onclick = () => showReportSection('monthly');
+$('reportModeVatBtn').onclick = () => showReportSection('vat');
+$('reportModePettyBtn').onclick = () => showReportSection('petty');
+
 /* ---------------- VAT COMPARISON ---------------- */
-$('reportModeMonthlyBtn').onclick = () => {
-  $('reportModeMonthlyBtn').classList.add('active');
-  $('reportModeVatBtn').classList.remove('active');
-  $('monthlyReportSection').style.display = 'block';
-  $('vatComparisonSection').style.display = 'none';
-};
-$('reportModeVatBtn').onclick = () => {
-  $('reportModeVatBtn').classList.add('active');
-  $('reportModeMonthlyBtn').classList.remove('active');
-  $('vatComparisonSection').style.display = 'block';
-  $('monthlyReportSection').style.display = 'none';
-};
 
 let vatMonthsData = [];
 
@@ -1568,6 +1737,164 @@ function extractYear(tabName){
 
 $('printVatBtn').onclick = () => window.print();
 
+/* ---------------- PETTY CASH LEDGER ---------------- */
+function populatePettyLedgerMemberSelect(){
+  const sel = $('pettyLedgerMemberSelect');
+  sel.innerHTML = pettyMembers.length
+    ? pettyMembers.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('')
+    : '<option value="">Add member names in Settings first</option>';
+}
+
+$('loadPettyLedgerBtn').onclick = async () => {
+  const member = $('pettyLedgerMemberSelect').value;
+  if (!member){ setStatus('pettyLedgerStatus','Add member names in Settings first','err'); return; }
+  if (!scriptUrl){ setStatus('pettyLedgerStatus','Connect to your sheet first (Settings)','err'); return; }
+  setStatus('pettyLedgerStatus','Loading ledger…','');
+  $('pettyLedgerWrap').style.display = 'none';
+  $('loadPettyLedgerBtn').disabled = true;
+  try {
+    const res = await fetchWithTimeout(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'getPettyCashLedger', member })
+    }, 30000);
+    const data = await res.json();
+    if (!data.ok){ setStatus('pettyLedgerStatus', data.error || 'Failed to load ledger','err'); return; }
+    renderPettyLedger(data);
+    setStatus('pettyLedgerStatus','','');
+  } catch(err){ setStatus('pettyLedgerStatus','Could not reach your sheet — check connection','err'); }
+  finally { $('loadPettyLedgerBtn').disabled = false; }
+};
+
+function renderPettyLedger(data){
+  const genDate = new Date().toLocaleString();
+  const issuesSorted = (data.issues||[]).slice().sort((a,b) => parseReportDate(a.date) - parseReportDate(b.date));
+  const billsSorted = (data.bills||[]).slice().sort((a,b) => parseReportDate(a.date) - parseReportDate(b.date));
+
+  $('pettyLedgerContent').innerHTML = `
+    <div class="report-header">
+      <img src="logo.png" alt="MYM Constructions">
+      <div>
+        <div class="report-company-name">MYM CONSTRUCTIONS</div>
+        <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
+      </div>
+    </div>
+    <div class="report-title">Petty Cash Ledger — ${escapeHtml(data.member)}</div>
+    <div class="report-meta">Generated ${genDate}</div>
+
+    <div class="report-totals" style="width:100%;margin-bottom:20px;">
+      <div><span>Total Cash Issued</span><span>${data.issued.toFixed(3)}</span></div>
+      <div><span>Total Bills Submitted</span><span>${data.tagged.toFixed(3)}</span></div>
+      <div class="grand"><span>Balance ${data.balance >= 0 ? '(Still Held / Owed by Member)' : '(Overspent — Owed to Member)'}</span><span>${Math.abs(data.balance).toFixed(3)}</span></div>
+    </div>
+
+    <div class="report-title" style="font-size:14px;">Cash Issued</div>
+    <div class="report-table-wrap">
+    <table class="report-table" style="min-width:480px;">
+      <thead><tr><th>Tab</th><th>Date</th><th>Issued By</th><th class="num">Amount</th><th>Note</th></tr></thead>
+      <tbody>
+        ${issuesSorted.length ? issuesSorted.map(i => `<tr><td>${escapeHtml(i.tab)}</td><td>${escapeHtml(i.date)}</td><td>${escapeHtml(i.issuedBy||'')}</td><td class="num">${(parseFloat(i.amount)||0).toFixed(3)}</td><td>${escapeHtml(i.note||'')}</td></tr>`).join('') : '<tr><td colspan="5">No cash issued to this member yet</td></tr>'}
+      </tbody>
+    </table>
+    </div>
+
+    <div class="report-title" style="font-size:14px;margin-top:18px;">Bills Submitted (tagged "Petty Cash - ${escapeHtml(data.member)}")</div>
+    <div class="report-table-wrap">
+    <table class="report-table" style="min-width:500px;">
+      <thead><tr><th>Tab</th><th>Date</th><th>Bill No</th><th>Vendor</th><th class="num">Total</th><th>Photo</th></tr></thead>
+      <tbody>
+        ${billsSorted.length ? billsSorted.map(b => `<tr><td>${escapeHtml(b.tab)}</td><td>${escapeHtml(b.date)}</td><td>${escapeHtml(b.billNo||'')}</td><td>${escapeHtml(b.vendor||'')}</td><td class="num">${(parseFloat(b.total)||0).toFixed(3)}</td><td>${b.photoUrl ? `<a href="${b.photoUrl}" target="_blank">View</a>` : '—'}</td></tr>`).join('') : '<tr><td colspan="6">No bills tagged to this member yet</td></tr>'}
+      </tbody>
+    </table>
+    </div>
+  `;
+  $('pettyLedgerWrap').style.display = 'block';
+}
+
+$('printPettyLedgerBtn').onclick = () => window.print();
+
+/* ---------------- PETTY CASH VOUCHER ---------------- */
+$('generateVoucherBtn').onclick = () => {
+  const memberName = $('fVendorMemberSelect').value;
+  if (!memberName){ setStatus('billStatus','Select a member first','err'); return; }
+  const issuedBy = $('fBillNo').value.trim();
+  if (!issuedBy){ setStatus('billStatus','Enter who is issuing the cash first (Issued By)','err'); return; }
+  const amount = parseFloat($('fAmount').value)||0;
+  if (!amount){ setStatus('billStatus','Enter an amount first','err'); return; }
+  const dateVal = $('fDate').value || new Date().toISOString().slice(0,10);
+  const ddmmyyyy = dateVal.split('-').reverse().join('/');
+
+  $('voucherPrintArea').innerHTML = `
+    <div class="report-header">
+      <img src="logo.png" alt="MYM Constructions">
+      <div>
+        <div class="report-company-name">MYM CONSTRUCTIONS</div>
+        <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
+      </div>
+    </div>
+    <div class="report-title">Petty Cash Voucher</div>
+    <div class="report-meta">Date: ${escapeHtml(ddmmyyyy)}</div>
+    <div style="margin-top:26px;font-size:15px;line-height:1.9;">
+      Received from <b>MYM Constructions</b> the sum of:
+      <div style="font-size:30px;font-weight:700;margin:16px 0;font-family:'IBM Plex Mono',monospace;">BD ${amount.toFixed(3)}</div>
+      Issued by: <b>${escapeHtml(issuedBy)}</b><br>
+      Received by: <b>${escapeHtml(memberName)}</b><br>
+      Purpose: Petty cash for site purchases (fuel, food, materials, etc.)
+    </div>
+    <div style="margin-top:60px;display:flex;justify-content:space-between;font-size:13px;">
+      <div>Issued by (sign): _____________________</div>
+      <div>Received by (sign): _____________________</div>
+    </div>
+  `;
+  document.body.classList.add('printing-voucher');
+  window.print();
+  setTimeout(() => document.body.classList.remove('printing-voucher'), 800);
+};
+window.addEventListener('afterprint', () => document.body.classList.remove('printing-voucher'));
+
+/* ---------------- TOUCHSCREEN SIGNATURE PAD ---------------- */
+let sigCtx = null, sigDrawing = false, sigHasStroke = false;
+function initSignatureCanvas(){
+  const canvas = $('signatureCanvas');
+  sigCtx = canvas.getContext('2d');
+  sigCtx.fillStyle = '#fff';
+  sigCtx.fillRect(0,0,canvas.width,canvas.height);
+  sigCtx.strokeStyle = '#1c2128';
+  sigCtx.lineWidth = 3;
+  sigCtx.lineCap = 'round';
+  sigHasStroke = false;
+}
+function sigPos(canvas, e){
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+  const point = e.touches ? e.touches[0] : e;
+  return { x: (point.clientX - rect.left) * scaleX, y: (point.clientY - rect.top) * scaleY };
+}
+function wireSignatureCanvas(){
+  const canvas = $('signatureCanvas');
+  const start = (e) => { e.preventDefault(); sigDrawing = true; const p = sigPos(canvas,e); sigCtx.beginPath(); sigCtx.moveTo(p.x,p.y); };
+  const move = (e) => { if (!sigDrawing) return; e.preventDefault(); const p = sigPos(canvas,e); sigCtx.lineTo(p.x,p.y); sigCtx.stroke(); sigHasStroke = true; };
+  const end = () => { sigDrawing = false; };
+  canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+  canvas.addEventListener('touchstart', start, {passive:false}); canvas.addEventListener('touchmove', move, {passive:false}); canvas.addEventListener('touchend', end);
+}
+wireSignatureCanvas();
+
+$('signatureToggleBtn').onclick = () => {
+  const showing = $('signaturePadWrap').style.display !== 'none';
+  if (showing){ $('signaturePadWrap').style.display = 'none'; $('signatureToggleBtn').textContent = '✍️ Or sign on screen instead'; }
+  else { $('signaturePadWrap').style.display = 'block'; $('signatureToggleBtn').textContent = '📷 Use photo instead'; initSignatureCanvas(); }
+};
+$('sigClearBtn').onclick = () => initSignatureCanvas();
+$('sigSaveBtn').onclick = () => {
+  if (!sigHasStroke){ setStatus('billStatus','Draw a signature first','err'); return; }
+  const canvas = $('signatureCanvas');
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  capturedPhotos.push({ base64: dataUrl.split(',')[1], previewUrl: dataUrl });
+  renderPhotoThumbs();
+  $('signaturePadWrap').style.display = 'none';
+  $('signatureToggleBtn').textContent = '✍️ Or sign on screen instead';
+};
+
 /* Pulls real bill data for one tab from the Sheet — shared source of truth for Home AND History */
 async function fetchTabFromSheet(tab){
   if (!scriptUrl || !tab || !navigator.onLine) return false;
@@ -1582,7 +1909,7 @@ async function fetchTabFromSheet(tab){
       data.rows.forEach(r => remoteHistoryEntries.push({
         id: 'r_' + tab + '_' + r.sn,
         tab, date: r.date,
-        billNo: String(r.billNo||''), vendor: r.vendor||'', note: r.note||'',
+        billNo: String(r.billNo||''), vendor: r.vendor||'', note: r.note||'', paidVia: r.paidVia||'',
         amount: r.amount, vat: r.vat, total: r.total,
         synced: true, sn: r.sn, photoUrl: r.photoUrl || '',
         createdAt: 0
@@ -1590,6 +1917,7 @@ async function fetchTabFromSheet(tab){
       remoteFetchedTabs.add(tab);
       pruneLocalEntries(); // synced local copies are now redundant — the Sheet is the source of truth
       populateVendorDatalist();
+    populateIssuerDatalist();
       return true;
     }
   } catch(err){ /* leave cached/local data as fallback */ }
@@ -1614,7 +1942,7 @@ async function refreshHome(){
 }
 
 async function syncOne(entry){
-  const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, note:entry.note, photosBase64:entry.photosBase64 || [] };
+  const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, note:entry.note, paidVia:entry.paidVia||'', photosBase64:entry.photosBase64 || [] };
   const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) }, 60000);
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Sync failed');
@@ -1655,11 +1983,13 @@ buildPinPad();
 startUnlock();
 updateModeUI();
 populateVendorDatalist();
+    populateIssuerDatalist();
 if (scriptUrl && tabs.length){ render(); refreshHome(); }
 else if (scriptUrl){
   fetchWithTimeout(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); refreshHome(); } }).catch(()=>render());
 } else { render(); switchView('settings'); }
 setInterval(() => { syncPending(false); refreshHome(); }, 30000);
 </script>
+<div id="voucherPrintArea" style="display:none;"></div>
 </body>
 </html>
