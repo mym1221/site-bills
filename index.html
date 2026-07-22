@@ -1964,7 +1964,7 @@ async function refreshHome(){
 }
 
 async function syncOne(entry){
-  const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, note:entry.note, paidVia:entry.paidVia||'', photosBase64:entry.photosBase64 || [] };
+  const payload = { action:'add', tab:entry.tab, date:entry.date, billNo:entry.billNo, vendor:entry.vendor, amount:entry.amount, vat:entry.vat, note:entry.note, paidVia:entry.paidVia||'', clientId:entry.id, photosBase64:entry.photosBase64 || [] };
   const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) }, 60000);
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'Sync failed');
