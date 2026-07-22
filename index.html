@@ -149,7 +149,7 @@
   #reportContent{background:#ffffff;color:#1c2128;border-radius:10px;padding:20px;font-family:'Inter',sans-serif;}
   .report-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   .report-table{width:100%;min-width:640px;border-collapse:collapse;font-size:11px;table-layout:fixed;}
-  .report-table th, .report-table td{border:1px solid #d8cfc0;padding:6px 6px;text-align:left;word-wrap:break-word;overflow-wrap:break-word;}
+  .report-table th, .report-table td{border:1px solid #d8cfc0;padding:7px 6px;text-align:center;word-wrap:break-word;overflow-wrap:break-word;}
   .report-table th{background:#f4efe6;font-family:'Inter',sans-serif;font-weight:600;text-transform:uppercase;font-size:9px;letter-spacing:.03em;}
   .report-table td.num, .report-table th.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
   .report-table th:nth-child(1), .report-table td:nth-child(1){width:4%;}
@@ -173,8 +173,9 @@
   @media print{
     @page{ size: A4; margin: 12mm; }
     body{background:#fff;}
-    #app{max-width:none;padding:0;}
-    .bottom-nav, header, #printReportBtn, #printVatBtn, #printPettyLedgerBtn{display:none !important;}
+    html,body{height:auto !important;}
+    #app{max-width:none;padding:0;min-height:0 !important;}
+    .bottom-nav, header, #printReportBtn, #printVatBtn, #printPettyLedgerBtn, .modal{display:none !important;}
     .view:not(#view-reports){display:none !important;}
     #view-reports > header, #view-reports > .mode-toggle{display:none !important;}
     #monthlyReportSection > *:not(#reportPreviewWrap){display:none !important;}
@@ -182,9 +183,13 @@
     #pettyLedgerSection > *:not(#pettyLedgerWrap){display:none !important;}
     #reportPreviewWrap, #vatComparisonWrap, #pettyLedgerWrap{margin:0;}
     #reportContent, #vatComparisonContent, #pettyLedgerContent{border-radius:0;padding:0;width:100%;}
+    /* Safety net: hide any other stray top-level element (lock screen, leftover modal, etc.)
+       that could otherwise add invisible height and force a blank second page. */
+    body:not(.printing-voucher) > *:not(#app){display:none !important;}
     .report-table-wrap{overflow:visible;}
-    .report-table{min-width:0;font-size:9px;}
-    .report-table th, .report-table td{padding:4px 5px;}
+    .report-table{min-width:0;font-size:10.5px;}
+    .report-table th, .report-table td{padding:6px 6px;text-align:center;}
+    .report-table th.num, .report-table td.num{text-align:right;}
     .report-table tr{page-break-inside:avoid;}
     body.printing-voucher > *:not(#voucherPrintArea){display:none !important;}
     body.printing-voucher #voucherPrintArea{display:block !important;background:#fff;color:#1c2128;padding:0;font-family:'Inter',sans-serif;}
@@ -1574,10 +1579,17 @@ function parseReportDate(str){
 
 function renderReport(tab, rows){
   const sorted = rows.slice().sort((a,b) => parseReportDate(a.date) - parseReportDate(b.date));
+  const isPetty = isPettyTab(tab);
+  const isSales = isSalesTab(tab);
   const totalAmt = sorted.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
   const totalVat = sorted.reduce((s,r)=>s+(parseFloat(r.vat)||0),0);
   const grand = totalAmt + totalVat;
   const genDate = new Date().toLocaleString();
+
+  const title = isPetty ? 'Petty Cash Report' : (isSales ? 'Sales Report' : 'Site Expense Report');
+  const col3 = isPetty ? 'Issued By' : (isSales ? 'Invoice No' : 'Bill No');
+  const col4 = isPetty ? 'Member' : (isSales ? 'Client' : 'Vendor');
+  const rowLabel = isPetty ? 'record' : 'bill';
 
   $('reportContent').innerHTML = `
     <div class="report-header">
@@ -1587,12 +1599,12 @@ function renderReport(tab, rows){
         <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
       </div>
     </div>
-    <div class="report-title">${isSalesTab(tab) ? 'Sales Report' : 'Site Expense Report'} — ${escapeHtml(tabDisplayName(tab))}</div>
-    <div class="report-meta">Generated ${genDate} · ${sorted.length} bill${sorted.length===1?'':'s'} · sorted by date</div>
+    <div class="report-title">${title} — ${escapeHtml(tabDisplayName(tab))}</div>
+    <div class="report-meta">Generated ${genDate} · ${sorted.length} ${rowLabel}${sorted.length===1?'':'s'} · sorted by date</div>
     <div class="report-table-wrap">
     <table class="report-table">
       <thead>
-        <tr><th>S/N</th><th>Date</th><th>${isSalesTab(tab) ? 'Invoice No' : 'Bill No'}</th><th>${isSalesTab(tab) ? 'Client' : 'Vendor'}</th><th>Note</th><th class="num">Amount</th><th class="num">VAT</th><th class="num">Total</th></tr>
+        <tr><th>S/N</th><th>Date</th><th>${col3}</th><th>${col4}</th><th>Note</th><th class="num">Amount</th>${isPetty ? '' : '<th class="num">VAT</th>'}<th class="num">Total</th></tr>
       </thead>
       <tbody>
         ${sorted.map((r,idx) => `<tr>
@@ -1602,17 +1614,18 @@ function renderReport(tab, rows){
           <td>${escapeHtml(r.vendor||'')}</td>
           <td>${escapeHtml(r.note||'')}</td>
           <td class="num">${(parseFloat(r.amount)||0).toFixed(3)}</td>
-          <td class="num">${r.vat!==''&&r.vat!==undefined&&r.vat!==null ? parseFloat(r.vat).toFixed(3) : '—'}</td>
+          ${isPetty ? '' : `<td class="num">${r.vat!==''&&r.vat!==undefined&&r.vat!==null ? parseFloat(r.vat).toFixed(3) : '—'}</td>`}
           <td class="num">${(parseFloat(r.total)||0).toFixed(3)}</td>
         </tr>`).join('')}
       </tbody>
     </table>
     </div>
     <div class="report-totals">
-      <div><span>Total Bills</span><span>${sorted.length}</span></div>
+      <div><span>Total ${isPetty ? 'Records' : 'Bills'}</span><span>${sorted.length}</span></div>
+      ${isPetty ? `<div class="grand"><span>Total Cash Issued</span><span>${totalAmt.toFixed(3)}</span></div>` : `
       <div><span>Subtotal (without VAT)</span><span>${totalAmt.toFixed(3)}</span></div>
       <div><span>Total VAT</span><span>${totalVat.toFixed(3)}</span></div>
-      <div class="grand"><span>Grand Total (with VAT)</span><span>${grand.toFixed(3)}</span></div>
+      <div class="grand"><span>Grand Total (with VAT)</span><span>${grand.toFixed(3)}</span></div>`}
     </div>
   `;
   $('reportPreviewWrap').style.display = 'block';
