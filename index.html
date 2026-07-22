@@ -455,16 +455,9 @@
         </div>
         <select id="fVendorMemberSelect" style="display:none;"></select>
       </div>
-      <div class="field">
+      <div class="field" id="fCategoryWrap">
         <label for="fCategory">Category</label>
-        <select id="fCategory">
-          <option value="">—</option>
-          <option value="Food">Food</option>
-          <option value="Fuel">Fuel</option>
-          <option value="Material">Material</option>
-          <option value="Equipment">Equipment</option>
-          <option value="Other">Other</option>
-        </select>
+        <select id="fCategory"></select>
       </div>
     </div>
     <div class="field" id="paidViaWrap">
@@ -488,8 +481,7 @@
         <input type="number" step="0.001" inputmode="decimal" class="mono" id="fVat" placeholder="0.000">
       </div>
     </div>
-    <button class="btn btn-ghost" style="width:100%;margin-bottom:9px;display:none;" id="generateVoucherBtn">🧾 Generate Voucher</button>
-    <div class="computed-total">
+    <div class="computed-total" id="computedTotalWrap">
       <div class="computed-breakdown" id="computedBreakdown">Amount 0.000 · VAT 0.000</div>
       <div class="computed-total-row">
         <span>Total</span>
@@ -498,6 +490,7 @@
     </div>
     <div class="btn-row">
       <button class="btn btn-ghost" id="cancelBillBtn">Cancel</button>
+      <button class="btn btn-primary" id="generateVoucherBtn" style="display:none;">🧾 Generate Voucher</button>
       <button class="btn btn-primary" id="submitBillBtn">Save Bill</button>
     </div>
     <button class="btn btn-ghost" id="saveAddAnotherBtn" style="width:100%;margin-top:8px;">Save &amp; Add Another</button>
@@ -750,6 +743,9 @@ function populatePaidViaOptions(){
   sel.innerHTML = opts.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
 }
 
+const PURCHASE_CATEGORIES = ['Food','Fuel','Material','Equipment','Other'];
+const SALES_CATEGORIES = ['Other']; // deliberately minimal for now — real list to be added later
+
 function updateModeUI(){
   $('modePurchasesBtn').classList.toggle('active', mode === 'purchases');
   $('modeSalesBtn').classList.toggle('active', mode === 'sales');
@@ -772,6 +768,14 @@ function updateModeUI(){
   $('paidViaWrap').style.display = (isPetty || isSales) ? 'none' : 'block';
   $('generateVoucherBtn').style.display = isPetty ? 'block' : 'none';
   $('signatureToggleBtn').style.display = isPetty ? 'block' : 'none';
+  $('fCategoryWrap').style.display = isPetty ? 'none' : 'block';
+  if (!isPetty){
+    const catList = isSales ? SALES_CATEGORIES : PURCHASE_CATEGORIES;
+    $('fCategory').innerHTML = '<option value="">—</option>' + catList.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  }
+  $('computedTotalWrap').style.display = isPetty ? 'none' : 'block';
+  $('submitBillBtn').style.display = isPetty ? 'none' : 'block';
+  $('saveAddAnotherBtn').style.display = isPetty ? 'none' : (editingEntry ? 'none' : 'block');
 
   if (isPetty){
     $('fVendorMemberSelect').innerHTML = pettyMembers.length
@@ -1432,7 +1436,7 @@ async function performSaveBill(keepOpenForNext){
   $('submitBillBtn').disabled = true;
   $('saveAddAnotherBtn').disabled = true;
 
-  if (billNo && !skipDuplicateCheck){
+  if (billNo && !skipDuplicateCheck && mode !== 'petty'){
     if (remoteFetchedTabs.has(tab)){
       // Local data for this tab is confirmed fresh this session — safe to check instantly.
       const dup = checkDuplicateLocal(tab, billNo);
@@ -1813,7 +1817,7 @@ function renderPettyLedger(data){
 $('printPettyLedgerBtn').onclick = () => window.print();
 
 /* ---------------- PETTY CASH VOUCHER ---------------- */
-$('generateVoucherBtn').onclick = () => {
+$('generateVoucherBtn').onclick = async () => {
   const memberName = $('fVendorMemberSelect').value;
   if (!memberName){ setStatus('billStatus','Select a member first','err'); return; }
   const issuedBy = $('fBillNo').value.trim();
@@ -1822,6 +1826,10 @@ $('generateVoucherBtn').onclick = () => {
   if (!amount){ setStatus('billStatus','Enter an amount first','err'); return; }
   const dateVal = $('fDate').value || new Date().toISOString().slice(0,10);
   const ddmmyyyy = dateVal.split('-').reverse().join('/');
+
+  // Save the record first — Generate Voucher is now the one and only action for Petty Cash
+  const saved = await performSaveBill(false);
+  if (!saved) return; // performSaveBill already showed the relevant error
 
   $('voucherPrintArea').innerHTML = `
     <div class="report-header">
@@ -1848,6 +1856,7 @@ $('generateVoucherBtn').onclick = () => {
   document.body.classList.add('printing-voucher');
   window.print();
   setTimeout(() => document.body.classList.remove('printing-voucher'), 800);
+  $('billModal').classList.add('hidden');
 };
 window.addEventListener('afterprint', () => document.body.classList.remove('printing-voucher'));
 
