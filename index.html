@@ -1004,24 +1004,59 @@ $('saveSettingsBtn').onclick = async () => {
 
 $('syncNowBtn').onclick = () => syncPending(true);
 
+async function fetchPettyMembersFromServer(){
+  if (!scriptUrl || !navigator.onLine) return;
+  try {
+    const res = await fetchWithTimeout(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'getPettyCashMembers' })
+    }, 15000);
+    const data = await res.json();
+    if (data.ok && Array.isArray(data.members)){
+      pettyMembers = data.members;
+      localStorage.setItem(LS_KEYS.pettyMembers, JSON.stringify(pettyMembers)); // offline fallback cache only
+      renderPettyMembersList();
+      populatePaidViaOptions();
+    }
+  } catch(err){ /* keep local cache as fallback if the server can't be reached */ }
+}
+
+async function pushPettyMembersToServer(){
+  if (!scriptUrl || !navigator.onLine){
+    setStatus('pettyMembersStatus','Saved on this device only — will sync once you\'re back online','err');
+    return;
+  }
+  try {
+    const res = await fetchWithTimeout(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'savePettyCashMembers', members: pettyMembers })
+    }, 15000);
+    const data = await res.json();
+    if (!data.ok) setStatus('pettyMembersStatus', data.error || 'Could not sync to other devices', 'err');
+  } catch(err){ setStatus('pettyMembersStatus','Saved locally, but could not sync to other devices — check connection','err'); }
+}
+
 function renderPettyMembersList(){
   $('pettyMembersList').innerHTML = pettyMembers.length
     ? pettyMembers.map((m,i) => `<div class="petty-member-row"><span>${escapeHtml(m)}</span><button data-idx="${i}">Remove</button></div>`).join('')
     : '<p class="help-text" style="margin-bottom:0;">No members added yet.</p>';
   $('pettyMembersList').querySelectorAll('button[data-idx]').forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = async () => {
       const name = pettyMembers[parseInt(btn.dataset.idx)];
-      if (!confirm(`Remove "${name}"? Their past records stay in the Sheet — this only removes them from the dropdowns going forward.`)) return;
+      if (!confirm(`Remove "${name}"? Their past records stay in the Sheet — this only removes them from the dropdowns going forward, on every device.`)) return;
       pettyMembers.splice(parseInt(btn.dataset.idx), 1);
       savePettyMembers();
       renderPettyMembersList();
       populatePaidViaOptions();
-      setStatus('pettyMembersStatus','Removed','ok');
+      setStatus('pettyMembersStatus','Removing…','');
+      await pushPettyMembersToServer();
+      setStatus('pettyMembersStatus','Removed everywhere','ok');
     };
   });
 }
 renderPettyMembersList();
-$('addPettyMemberBtn').onclick = () => {
+fetchPettyMembersFromServer(); // pull the shared list as soon as Settings is available
+$('addPettyMemberBtn').onclick = async () => {
   const name = $('newPettyMemberInput').value.trim();
   if (!name){ setStatus('pettyMembersStatus','Enter a name first','err'); return; }
   if (pettyMembers.includes(name)){ setStatus('pettyMembersStatus','Already added','err'); return; }
@@ -1030,7 +1065,9 @@ $('addPettyMemberBtn').onclick = () => {
   renderPettyMembersList();
   populatePaidViaOptions();
   $('newPettyMemberInput').value = '';
-  setStatus('pettyMembersStatus','Added','ok');
+  setStatus('pettyMembersStatus','Saving…','');
+  await pushPettyMembersToServer();
+  setStatus('pettyMembersStatus','Added on every device','ok');
 };
 
 $('freeSpaceBtn').onclick = () => {
@@ -2005,7 +2042,8 @@ buildPinPad();
 startUnlock();
 updateModeUI();
 populateVendorDatalist();
-    populateIssuerDatalist();
+populateIssuerDatalist();
+fetchPettyMembersFromServer();
 if (scriptUrl && tabs.length){ render(); refreshHome(); }
 else if (scriptUrl){
   fetchWithTimeout(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); refreshHome(); } }).catch(()=>render());
