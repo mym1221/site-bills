@@ -327,6 +327,16 @@
     </div>
 
     <div id="pettyLedgerSection" style="display:none;">
+      <div class="totals-card" style="margin-bottom:16px;">
+        <div class="tab-row"><label style="margin:0;">Company-Wide Float</label><button class="link-btn" id="refreshCompanyFloatBtn">Refresh</button></div>
+        <div class="totals-grid">
+          <div class="totals-cell"><div class="totals-label">Total Issued</div><div class="totals-value mono" id="companyFloatIssued">—</div></div>
+          <div class="totals-cell"><div class="totals-label">Total Reconciled</div><div class="totals-value mono" id="companyFloatReconciled">—</div></div>
+          <div class="totals-cell" style="grid-column:1/-1;"><div class="totals-label">Outstanding (all members combined)</div><div class="totals-value mono accent" id="companyFloatOutstanding">—</div></div>
+        </div>
+        <div id="companyFloatByMember" style="margin-top:10px;"></div>
+      </div>
+
       <p class="help-text">Cash issued to a member vs bills they've submitted, across every month — tells you exactly how much they still owe or still hold.</p>
       <div class="field">
         <label for="pettyLedgerMemberSelect">Member</label>
@@ -472,6 +482,30 @@
     <div class="field">
       <label for="fNote">Note / Description (optional)</label>
       <input type="text" id="fNote" placeholder="e.g. cement for generator room repair">
+    </div>
+    <div id="reconciliationWrap" style="display:none;">
+      <div class="field" id="voucherNoDisplay" style="display:none;">
+        <label>Voucher No</label>
+        <div id="voucherNoValue" style="font-family:'IBM Plex Mono',monospace;font-size:15px;color:var(--accent);"></div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="fReconStatus">Reconciliation Status</label>
+          <select id="fReconStatus">
+            <option value="Open">Open</option>
+            <option value="Partial">Partial</option>
+            <option value="Reconciled">Reconciled</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fReconAmount">Reconciled Amount</label>
+          <input type="number" step="0.001" inputmode="decimal" class="mono" id="fReconAmount" placeholder="0.000">
+        </div>
+      </div>
+      <div class="field">
+        <label for="fReconDate">Reconciled Date</label>
+        <input type="date" id="fReconDate">
+      </div>
     </div>
     <div class="row2">
       <div class="field">
@@ -771,7 +805,7 @@ function updateModeUI(){
   $('fBillNoLabel').textContent = isPetty ? 'Issued By' : (isSales ? 'Invoice No' : 'Bill No');
   $('fBillNo').placeholder = isPetty ? 'e.g. Mubashar' : 'optional';
   $('paidViaWrap').style.display = (isPetty || isSales) ? 'none' : 'block';
-  $('generateVoucherBtn').style.display = isPetty ? 'block' : 'none';
+  $('generateVoucherBtn').style.display = (isPetty && !editingEntry) ? 'block' : 'none';
   $('signatureToggleBtn').style.display = isPetty ? 'block' : 'none';
   $('fCategoryWrap').style.display = isPetty ? 'none' : 'block';
   if (!isPetty){
@@ -779,8 +813,9 @@ function updateModeUI(){
     $('fCategory').innerHTML = '<option value="">—</option>' + catList.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   }
   $('computedTotalWrap').style.display = isPetty ? 'none' : 'block';
-  $('submitBillBtn').style.display = isPetty ? 'none' : 'block';
+  $('submitBillBtn').style.display = (isPetty && !editingEntry) ? 'none' : 'block';
   $('saveAddAnotherBtn').style.display = isPetty ? 'none' : (editingEntry ? 'none' : 'block');
+  $('reconciliationWrap').style.display = (isPetty && editingEntry) ? 'block' : 'none';
 
   if (isPetty){
     $('fVendorMemberSelect').innerHTML = pettyMembers.length
@@ -941,6 +976,8 @@ function openDetail(id){
     <div class="detail-row"><span>VAT</span><span>${e.vat !== '' && e.vat !== undefined ? parseFloat(e.vat).toFixed(3) : '—'}</span></div>
     <div class="detail-row"><span>Total</span><span>${(parseFloat(e.total)||0).toFixed(3)}</span></div>
     <div class="detail-row"><span>Status</span><span>${e.synced ? 'Synced (S/N #'+e.sn+')' : 'Pending sync'}</span></div>
+    ${e.voucherNo ? `<div class="detail-row"><span>Voucher No</span><span>${escapeHtml(e.voucherNo)}</span></div>` : ''}
+    ${e.voucherNo ? `<div class="detail-row"><span>Reconciliation</span><span>${escapeHtml(e.reconciledStatus||'Open')}${e.reconciledAmount !== '' && e.reconciledAmount !== undefined ? ' ('+parseFloat(e.reconciledAmount).toFixed(3)+')' : ''}</span></div>` : ''}
     ${e.note ? `<div class="detail-row"><span>Note</span><span style="text-align:right;max-width:70%;font-family:'Inter',sans-serif;">${escapeHtml(e.note)}</span></div>` : ''}
     ${e.photoUrl ? `<div class="detail-row"><span>Photo</span><span><a href="${e.photoUrl}" target="_blank" style="color:var(--accent);">Open in Drive</a></span></div>` : ''}
   `;
@@ -1178,11 +1215,17 @@ function openEditForBill(entry){
   if (entry.thumb){ capturedPhotos = []; renderPhotoThumbs(); $('photoThumbStrip').innerHTML = `<div class="photo-thumb"><img src="${entry.thumb}"></div>`; }
   else { renderPhotoThumbs(); }
   $('billStatus').textContent = entry.photoUrl && !entry.thumb ? 'This bill already has a photo/pages attached — leave as is, or add new photos below to replace them.' : '';
+  if (mode === 'petty'){
+    $('fReconStatus').value = entry.reconciledStatus || 'Open';
+    $('fReconAmount').value = entry.reconciledAmount !== '' && entry.reconciledAmount !== undefined ? entry.reconciledAmount : '';
+    $('fReconDate').value = entry.reconciledDate ? ddmmyyyyToIso(entry.reconciledDate) : '';
+    if (entry.voucherNo){ $('voucherNoDisplay').style.display = 'block'; $('voucherNoValue').textContent = entry.voucherNo; }
+    else { $('voucherNoDisplay').style.display = 'none'; }
+  }
   skipDuplicateCheck = true; // editing the same bill shouldn't trigger its own duplicate-number check
   isSubmitting = false;
   $('submitBillBtn').disabled = false;
   $('saveAddAnotherBtn').style.display = 'none'; // doesn't make sense mid-edit
-  $('generateVoucherBtn').style.display = 'none'; // edits don't re-generate a voucher
   $('billModal').classList.remove('hidden');
 }
 
@@ -1423,10 +1466,15 @@ async function performSaveBill(keepOpenForNext){
           return false;
         }
         const paidVia = mode === 'purchases' ? $('fPaidVia').value : '';
+        const isPettyEdit = mode === 'petty';
+        const reconciledStatus = isPettyEdit ? $('fReconStatus').value : '';
+        const reconciledAmount = isPettyEdit ? $('fReconAmount').value : '';
+        const reconciledDate = isPettyEdit && $('fReconDate').value ? $('fReconDate').value.split('-').reverse().join('/') : '';
         const payload = {
           action:'update', tab: editingEntry.tab, sn: editingEntry.sn,
           date, billNo, vendor, amount: breakdown.amount, vat: breakdown.vat,
-          note: noteVal, paidVia, photosBase64: capturedPhotos.map(p => p.base64),
+          note: noteVal, paidVia, reconciledStatus, reconciledAmount, reconciledDate,
+          photosBase64: capturedPhotos.map(p => p.base64),
           existingPhotoUrl: editingExistingPhotoUrl
         };
         const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload) }, 60000);
@@ -1443,6 +1491,12 @@ async function performSaveBill(keepOpenForNext){
           photoUrl: finalPhotoUrl,
           thumb: capturedPhotos.length ? capturedPhotos[0].previewUrl : (finalPhotoUrl ? null : editingEntry.thumb)
         };
+        if (isPettyEdit){
+          updated.reconciledStatus = reconciledStatus;
+          updated.reconciledAmount = reconciledAmount;
+          updated.reconciledDate = reconciledDate;
+          if (data.voucherNo) updated.voucherNo = data.voucherNo;
+        }
         const rIdx = remoteHistoryEntries.findIndex(x => x.id === editingEntry.id);
         if (rIdx !== -1) remoteHistoryEntries[rIdx] = updated;
         const lIdx = entries.findIndex(x => x.id === editingEntry.id);
@@ -1676,7 +1730,7 @@ function showReportSection(which){
   const sections = { monthly:$('monthlyReportSection'), vat:$('vatComparisonSection'), petty:$('pettyLedgerSection') };
   Object.keys(btns).forEach(k => btns[k].classList.toggle('active', k === which));
   Object.keys(sections).forEach(k => sections[k].style.display = k === which ? 'block' : 'none');
-  if (which === 'petty') populatePettyLedgerMemberSelect();
+  if (which === 'petty'){ populatePettyLedgerMemberSelect(); loadCompanyFloat(); }
 }
 $('reportModeMonthlyBtn').onclick = () => showReportSection('monthly');
 $('reportModeVatBtn').onclick = () => showReportSection('vat');
@@ -1792,6 +1846,34 @@ function extractYear(tabName){
 $('printVatBtn').onclick = () => window.print();
 
 /* ---------------- PETTY CASH LEDGER ---------------- */
+async function loadCompanyFloat(){
+  if (!scriptUrl || !navigator.onLine){
+    $('companyFloatIssued').textContent = '—';
+    $('companyFloatReconciled').textContent = '—';
+    $('companyFloatOutstanding').textContent = '—';
+    $('companyFloatByMember').innerHTML = '<p class="help-text" style="margin:0;">Connect to see the company-wide total.</p>';
+    return;
+  }
+  try {
+    const res = await fetchWithTimeout(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'getPettyCashCompanyTotal' })
+    }, 20000);
+    const data = await res.json();
+    if (!data.ok) return;
+    $('companyFloatIssued').textContent = data.totalIssued.toFixed(3);
+    $('companyFloatReconciled').textContent = data.totalReconciled.toFixed(3);
+    $('companyFloatOutstanding').textContent = data.totalOutstanding.toFixed(3);
+    $('companyFloatByMember').innerHTML = (data.members||[]).map(m => `
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);padding:4px 0;border-top:1px solid #333c47;">
+        <span>${escapeHtml(m.name)}</span>
+        <span class="mono">${m.outstanding.toFixed(3)} outstanding</span>
+      </div>
+    `).join('');
+  } catch(err){ /* leave dashes on screen — non-critical summary */ }
+}
+$('refreshCompanyFloatBtn').onclick = (e) => { e.preventDefault(); loadCompanyFloat(); };
+
 function populatePettyLedgerMemberSelect(){
   const sel = $('pettyLedgerMemberSelect');
   sel.innerHTML = pettyMembers.length
@@ -1837,16 +1919,25 @@ function renderPettyLedger(data){
 
     <div class="report-totals" style="width:100%;margin-bottom:20px;">
       <div><span>Total Cash Issued</span><span>${data.issued.toFixed(3)}</span></div>
-      <div><span>Total Bills Submitted</span><span>${data.tagged.toFixed(3)}</span></div>
-      <div class="grand"><span>Balance ${data.balance >= 0 ? '(Still Held / Owed by Member)' : '(Overspent — Owed to Member)'}</span><span>${Math.abs(data.balance).toFixed(3)}</span></div>
+      <div><span>Total Bills Submitted (auto, from Purchases)</span><span>${data.tagged.toFixed(3)}</span></div>
+      <div><span>Total Reconciled (manually confirmed)</span><span>${data.reconciled.toFixed(3)}</span></div>
+      <div class="grand"><span>Outstanding ${data.outstanding >= 0 ? '(Still Held / Owed by Member)' : '(Overspent — Owed to Member)'}</span><span>${Math.abs(data.outstanding).toFixed(3)}</span></div>
     </div>
 
     <div class="report-title" style="font-size:14px;">Cash Issued</div>
     <div class="report-table-wrap">
-    <table class="report-table" style="min-width:480px;">
-      <thead><tr><th>Tab</th><th>Date</th><th>Issued By</th><th class="num">Amount</th><th>Note</th></tr></thead>
+    <table class="report-table" style="min-width:640px;">
+      <thead><tr><th>Voucher No</th><th>Tab</th><th>Date</th><th>Issued By</th><th class="num">Amount</th><th>Status</th><th class="num">Reconciled</th></tr></thead>
       <tbody>
-        ${issuesSorted.length ? issuesSorted.map(i => `<tr><td>${escapeHtml(i.tab)}</td><td>${escapeHtml(i.date)}</td><td>${escapeHtml(i.issuedBy||'')}</td><td class="num">${(parseFloat(i.amount)||0).toFixed(3)}</td><td>${escapeHtml(i.note||'')}</td></tr>`).join('') : '<tr><td colspan="5">No cash issued to this member yet</td></tr>'}
+        ${issuesSorted.length ? issuesSorted.map(i => `<tr>
+          <td>${escapeHtml(i.voucherNo||'—')}</td>
+          <td>${escapeHtml(i.tab)}</td>
+          <td>${escapeHtml(i.date)}</td>
+          <td>${escapeHtml(i.issuedBy||'')}</td>
+          <td class="num">${(parseFloat(i.amount)||0).toFixed(3)}</td>
+          <td>${escapeHtml(i.reconciledStatus||'Open')}</td>
+          <td class="num">${i.reconciledAmount !== '' && i.reconciledAmount !== undefined ? (parseFloat(i.reconciledAmount)||0).toFixed(3) : '—'}</td>
+        </tr>`).join('') : '<tr><td colspan="7">No cash issued to this member yet</td></tr>'}
       </tbody>
     </table>
     </div>
@@ -1874,12 +1965,45 @@ $('generateVoucherBtn').onclick = async () => {
   if (!issuedBy){ setStatus('billStatus','Enter who is issuing the cash first (Issued By)','err'); return; }
   const amount = parseFloat($('fAmount').value)||0;
   if (!amount){ setStatus('billStatus','Enter an amount first','err'); return; }
+  if (isSubmitting) return;
+
+  isSubmitting = true;
+  $('generateVoucherBtn').disabled = true;
+  $('generateVoucherBtn').textContent = 'Saving…';
+  setStatus('billStatus','','');
+
+  const tab = $('fTab').value;
   const dateVal = $('fDate').value || new Date().toISOString().slice(0,10);
   const ddmmyyyy = dateVal.split('-').reverse().join('/');
 
-  // Save the record first — Generate Voucher is now the one and only action for Petty Cash
-  const saved = await performSaveBill(false);
-  if (!saved) return; // performSaveBill already showed the relevant error
+  const entry = {
+    id:'e'+Date.now(), tab, date: dateVal, billNo: issuedBy, vendor: memberName,
+    amount, vat: 0, total: amount,
+    note: $('fNote').value.trim() || $('fCategory').value,
+    photosBase64: capturedPhotos.map(p => p.base64),
+    thumb: capturedPhotos.length ? capturedPhotos[0].previewUrl : null,
+    synced:false, sn:null, createdAt:Date.now()
+  };
+  entries.push(entry); saveEntries();
+  activeTab = tab; activeTabPetty = tab; localStorage.setItem(LS_KEYS.activeTabPetty, tab);
+  render();
+
+  // Wait for the actual sync (not fire-and-forget) so the printed voucher can show
+  // the real permanent Voucher No, not a placeholder.
+  let voucherNo = '';
+  let syncNote = '';
+  if (scriptUrl && navigator.onLine){
+    try {
+      await syncOne(entry);
+      saveEntries();
+      voucherNo = entry.voucherNo || '';
+      populateVendorDatalist(); populateIssuerDatalist();
+    } catch(err){
+      syncNote = 'Not yet synced — this voucher\'s official number will be confirmed once back online.';
+    }
+  } else {
+    syncNote = 'Offline — this voucher\'s official number will be confirmed once synced.';
+  }
 
   $('voucherPrintArea').innerHTML = `
     <div class="report-header">
@@ -1890,7 +2014,7 @@ $('generateVoucherBtn').onclick = async () => {
       </div>
     </div>
     <div class="report-title">Petty Cash Voucher</div>
-    <div class="report-meta">Date: ${escapeHtml(ddmmyyyy)}</div>
+    <div class="report-meta">Date: ${escapeHtml(ddmmyyyy)}${voucherNo ? ' · Voucher No: ' + escapeHtml(voucherNo) : ''}</div>
     <div style="margin-top:26px;font-size:15px;line-height:1.9;">
       Received from <b>MYM Constructions</b> the sum of:
       <div style="font-size:30px;font-weight:700;margin:16px 0;font-family:'IBM Plex Mono',monospace;">BD ${amount.toFixed(3)}</div>
@@ -1902,10 +2026,14 @@ $('generateVoucherBtn').onclick = async () => {
       <div>Issued by (sign): _____________________</div>
       <div>Received by (sign): _____________________</div>
     </div>
+    ${syncNote ? `<div style="margin-top:16px;font-size:10.5px;color:#a04;">${escapeHtml(syncNote)}</div>` : ''}
   `;
   document.body.classList.add('printing-voucher');
   window.print();
   setTimeout(() => document.body.classList.remove('printing-voucher'), 800);
+  isSubmitting = false;
+  $('generateVoucherBtn').disabled = false;
+  $('generateVoucherBtn').textContent = '🧾 Generate Voucher';
   $('billModal').classList.add('hidden');
 };
 window.addEventListener('afterprint', () => document.body.classList.remove('printing-voucher'));
@@ -1969,6 +2097,7 @@ async function fetchTabFromSheet(tab){
         id: 'r_' + tab + '_' + r.sn,
         tab, date: r.date,
         billNo: String(r.billNo||''), vendor: r.vendor||'', note: r.note||'', paidVia: r.paidVia||'',
+        voucherNo: r.voucherNo||'', reconciledStatus: r.reconciledStatus||'', reconciledAmount: r.reconciledAmount, reconciledDate: r.reconciledDate||'',
         amount: r.amount, vat: r.vat, total: r.total,
         synced: true, sn: r.sn, photoUrl: r.photoUrl || '',
         createdAt: 0
@@ -2007,6 +2136,7 @@ async function syncOne(entry){
   if (!data.ok) throw new Error(data.error || 'Sync failed');
   entry.synced = true; entry.sn = data.sn;
   if (data.billNo) entry.billNo = data.billNo; // picks up the auto-assigned AUTO-N if the bill had no number
+  if (data.voucherNo) entry.voucherNo = data.voucherNo;
   if (data.photoUrl){ entry.photoUrl = data.photoUrl; entry.thumb = null; } // Drive has it now, drop the local copy
   entry.photosBase64 = null;
 }
