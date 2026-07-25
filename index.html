@@ -170,31 +170,6 @@
   .report-totals div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e0d5;font-size:13px;}
   .report-totals div.grand{font-weight:700;font-size:15px;border-bottom:none;border-top:2px solid #1c2128;margin-top:4px;padding-top:8px;}
 
-  @media print{
-    @page{ size: A4; margin: 12mm; }
-    body{background:#fff;}
-    html,body{height:auto !important;}
-    #app{max-width:none;padding:0;min-height:0 !important;}
-    .bottom-nav, header, #printReportBtn, #printVatBtn, #printPettyLedgerBtn, .modal{display:none !important;}
-    .view:not(#view-reports){display:none !important;}
-    #view-reports > header, #view-reports > .mode-toggle{display:none !important;}
-    #monthlyReportSection > *:not(#reportPreviewWrap){display:none !important;}
-    #vatComparisonSection > *:not(#vatComparisonWrap){display:none !important;}
-    #pettyLedgerSection > *:not(#pettyLedgerWrap){display:none !important;}
-    #reportPreviewWrap, #vatComparisonWrap, #pettyLedgerWrap{margin:0;}
-    #reportContent, #vatComparisonContent, #pettyLedgerContent{border-radius:0;padding:0;width:100%;}
-    /* Safety net: hide any other stray top-level element (lock screen, leftover modal, etc.)
-       that could otherwise add invisible height and force a blank second page. */
-    body:not(.printing-voucher) > *:not(#app){display:none !important;}
-    .report-table-wrap{overflow:visible;}
-    .report-table{min-width:0;font-size:10.5px;}
-    .report-table th, .report-table td{padding:6px 6px;text-align:center;}
-    .report-table th.num, .report-table td.num{text-align:right;}
-    .report-table tr{page-break-inside:avoid;}
-    body.printing-voucher > *:not(#voucherPrintArea){display:none !important;}
-    body.printing-voucher #voucherPrintArea{display:block !important;background:#fff;color:#1c2128;padding:0;font-family:'Inter',sans-serif;}
-  }
-
   /* PIN lock */
   #lockScreen{position:fixed;inset:0;background:var(--ink);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;}
   #lockScreen.hidden{display:none;}
@@ -596,15 +571,49 @@ let firstPinTemp = '';
 
 const $ = (id) => document.getElementById(id);
 
-// Mobile browsers can call window.print() before newly-injected content has actually
-// been painted, producing a blank printed page even though the hiding CSS worked fine.
-// Waiting two animation frames guarantees a real paint has happened first.
-function printSoon(){
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      window.print();
-    });
-  });
+// Opens a clean, standalone window containing ONLY the report/voucher HTML, with its
+// own embedded styles, and prints that. This avoids relying on hiding the rest of the
+// app via CSS during print — a pattern that some mobile browsers handle unreliably,
+// producing a blank page even when the timing is right. A separate window sidesteps
+// that entirely since there's nothing else on the page to hide in the first place.
+function openPrintWindow(bodyHtml){
+  const printWin = window.open('', '_blank');
+  if (!printWin){ alert('Please allow pop-ups for this site to print.'); return; }
+  printWin.document.open();
+  printWin.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>MYM Constructions — Print</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  @page{ size: A4; margin: 12mm; }
+  *{box-sizing:border-box;}
+  body{margin:0;padding:0;font-family:'Inter',sans-serif;color:#1c2128;background:#fff;}
+  .report-header{display:flex;align-items:center;gap:14px;border-bottom:2px solid #1c2128;padding-bottom:14px;margin-bottom:14px;}
+  .report-header img{height:52px;width:auto;}
+  .report-company-name{font-family:'Oswald',sans-serif;font-weight:700;font-size:20px;letter-spacing:.03em;}
+  .report-company-full{font-size:11.5px;color:#5b6774;}
+  .report-title{font-family:'Oswald',sans-serif;font-weight:600;font-size:16px;margin-bottom:2px;}
+  .report-meta{font-size:11px;color:#5b6774;margin-bottom:14px;}
+  .report-table-wrap{overflow:visible;}
+  .report-table{width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed;}
+  .report-table th, .report-table td{border:1px solid #d8cfc0;padding:6px 6px;text-align:center;word-wrap:break-word;overflow-wrap:break-word;}
+  .report-table th{background:#f4efe6;font-family:'Inter',sans-serif;font-weight:600;text-transform:uppercase;font-size:9px;letter-spacing:.03em;}
+  .report-table td.num, .report-table th.num{text-align:right;font-family:'IBM Plex Mono',monospace;}
+  .report-table tr{page-break-inside:avoid;}
+  .report-totals{margin-top:16px;margin-left:auto;width:300px;}
+  .report-totals div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #e5e0d5;font-size:13px;}
+  .report-totals div.grand{font-weight:700;font-size:15px;border-bottom:none;border-top:2px solid #1c2128;margin-top:4px;padding-top:8px;}
+</style>
+</head>
+<body>${bodyHtml}</body>
+</html>`);
+  printWin.document.close();
+  let printed = false;
+  const doPrint = () => { if (printed) return; printed = true; printWin.focus(); printWin.print(); };
+  printWin.onload = () => setTimeout(doPrint, 250);
+  setTimeout(doPrint, 1200); // fallback in case onload doesn't fire reliably on some mobile browsers
 }
 
 // Every network call MUST go through this — plain fetch() has no timeout and can
@@ -1733,7 +1742,7 @@ function renderReport(tab, rows){
   $('reportPreviewWrap').style.display = 'block';
 }
 
-$('printReportBtn').onclick = () => printSoon();
+$('printReportBtn').onclick = () => openPrintWindow($('reportContent').innerHTML);
 
 /* ---------------- REPORT MODE TOGGLE (3-way) ---------------- */
 function showReportSection(which){
@@ -1854,7 +1863,7 @@ function extractYear(tabName){
   return m ? m[0] : '2000';
 }
 
-$('printVatBtn').onclick = () => printSoon();
+$('printVatBtn').onclick = () => openPrintWindow($('vatComparisonContent').innerHTML);
 
 /* ---------------- PETTY CASH LEDGER ---------------- */
 async function loadCompanyFloat(){
@@ -1966,7 +1975,7 @@ function renderPettyLedger(data){
   $('pettyLedgerWrap').style.display = 'block';
 }
 
-$('printPettyLedgerBtn').onclick = () => printSoon();
+$('printPettyLedgerBtn').onclick = () => openPrintWindow($('pettyLedgerContent').innerHTML);
 
 /* ---------------- PETTY CASH VOUCHER ---------------- */
 $('generateVoucherBtn').onclick = async () => {
@@ -2016,7 +2025,7 @@ $('generateVoucherBtn').onclick = async () => {
     syncNote = 'Offline — this voucher\'s official number will be confirmed once synced.';
   }
 
-  $('voucherPrintArea').innerHTML = `
+  const voucherHtml = `
     <div class="report-header">
       <img src="logo.png" alt="MYM Constructions">
       <div>
@@ -2039,15 +2048,12 @@ $('generateVoucherBtn').onclick = async () => {
     </div>
     ${syncNote ? `<div style="margin-top:16px;font-size:10.5px;color:#a04;">${escapeHtml(syncNote)}</div>` : ''}
   `;
-  document.body.classList.add('printing-voucher');
-  printSoon();
-  setTimeout(() => document.body.classList.remove('printing-voucher'), 1000);
+  openPrintWindow(voucherHtml);
   isSubmitting = false;
   $('generateVoucherBtn').disabled = false;
   $('generateVoucherBtn').textContent = '🧾 Generate Voucher';
   $('billModal').classList.add('hidden');
 };
-window.addEventListener('afterprint', () => document.body.classList.remove('printing-voucher'));
 
 /* ---------------- TOUCHSCREEN SIGNATURE PAD ---------------- */
 let sigCtx = null, sigDrawing = false, sigHasStroke = false;
@@ -2191,6 +2197,5 @@ else if (scriptUrl){
 } else { render(); switchView('settings'); }
 setInterval(() => { syncPending(false); refreshHome(); }, 30000);
 </script>
-<div id="voucherPrintArea" style="display:none;"></div>
 </body>
 </html>
