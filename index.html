@@ -596,6 +596,17 @@ let firstPinTemp = '';
 
 const $ = (id) => document.getElementById(id);
 
+// Mobile browsers can call window.print() before newly-injected content has actually
+// been painted, producing a blank printed page even though the hiding CSS worked fine.
+// Waiting two animation frames guarantees a real paint has happened first.
+function printSoon(){
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.print();
+    });
+  });
+}
+
 // Every network call MUST go through this — plain fetch() has no timeout and can
 // hang indefinitely on a flaky connection, leaving the UI stuck with no error shown.
 async function fetchWithTimeout(url, options={}, timeoutMs=20000){
@@ -1722,7 +1733,7 @@ function renderReport(tab, rows){
   $('reportPreviewWrap').style.display = 'block';
 }
 
-$('printReportBtn').onclick = () => window.print();
+$('printReportBtn').onclick = () => printSoon();
 
 /* ---------------- REPORT MODE TOGGLE (3-way) ---------------- */
 function showReportSection(which){
@@ -1843,7 +1854,7 @@ function extractYear(tabName){
   return m ? m[0] : '2000';
 }
 
-$('printVatBtn').onclick = () => window.print();
+$('printVatBtn').onclick = () => printSoon();
 
 /* ---------------- PETTY CASH LEDGER ---------------- */
 async function loadCompanyFloat(){
@@ -1955,7 +1966,7 @@ function renderPettyLedger(data){
   $('pettyLedgerWrap').style.display = 'block';
 }
 
-$('printPettyLedgerBtn').onclick = () => window.print();
+$('printPettyLedgerBtn').onclick = () => printSoon();
 
 /* ---------------- PETTY CASH VOUCHER ---------------- */
 $('generateVoucherBtn').onclick = async () => {
@@ -2029,8 +2040,8 @@ $('generateVoucherBtn').onclick = async () => {
     ${syncNote ? `<div style="margin-top:16px;font-size:10.5px;color:#a04;">${escapeHtml(syncNote)}</div>` : ''}
   `;
   document.body.classList.add('printing-voucher');
-  window.print();
-  setTimeout(() => document.body.classList.remove('printing-voucher'), 800);
+  printSoon();
+  setTimeout(() => document.body.classList.remove('printing-voucher'), 1000);
   isSubmitting = false;
   $('generateVoucherBtn').disabled = false;
   $('generateVoucherBtn').textContent = '🧾 Generate Voucher';
