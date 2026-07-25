@@ -576,9 +576,22 @@ const $ = (id) => document.getElementById(id);
 // app via CSS during print — a pattern that some mobile browsers handle unreliably,
 // producing a blank page even when the timing is right. A separate window sidesteps
 // that entirely since there's nothing else on the page to hide in the first place.
-function openPrintWindow(bodyHtml){
+// MUST be called synchronously, directly inside a click handler, before any "await" —
+// mobile browsers only reliably allow window.open() when it's tied directly to the
+// user's tap with nothing asynchronous in between. If something needs to finish
+// loading first (like confirming a save), open the window now and fill it in later
+// with writeAndPrint() — don't wait until the data is ready to open it.
+function openBlankPrintWindow(){
   const printWin = window.open('', '_blank');
-  if (!printWin){ alert('Please allow pop-ups for this site to print.'); return; }
+  if (!printWin){ alert('Please allow pop-ups for this site to print.'); return null; }
+  printWin.document.open();
+  printWin.document.write('<!DOCTYPE html><html><body style="font-family:sans-serif;padding:20px;color:#555;">Preparing…</body></html>');
+  printWin.document.close();
+  return printWin;
+}
+
+function writeAndPrint(printWin, bodyHtml){
+  if (!printWin || printWin.closed){ alert('The print window was closed before it was ready. Please try again.'); return; }
   printWin.document.open();
   printWin.document.write(`<!DOCTYPE html>
 <html>
@@ -614,6 +627,14 @@ function openPrintWindow(bodyHtml){
   const doPrint = () => { if (printed) return; printed = true; printWin.focus(); printWin.print(); };
   printWin.onload = () => setTimeout(doPrint, 250);
   setTimeout(doPrint, 1200); // fallback in case onload doesn't fire reliably on some mobile browsers
+}
+
+// For flows with no waiting between the click and the content being ready
+// (Monthly Report / VAT Comparison / Ledger — content is already rendered by the time
+// Print is tapped), opening and writing in one step is fine.
+function openPrintWindow(bodyHtml){
+  const printWin = openBlankPrintWindow();
+  if (printWin) writeAndPrint(printWin, bodyHtml);
 }
 
 // Every network call MUST go through this — plain fetch() has no timeout and can
@@ -1987,6 +2008,12 @@ $('generateVoucherBtn').onclick = async () => {
   if (!amount){ setStatus('billStatus','Enter an amount first','err'); return; }
   if (isSubmitting) return;
 
+  // Open the print window RIGHT NOW, synchronously — before any awaiting happens below.
+  // This is what mobile browsers require to trust it was genuinely user-initiated;
+  // opening it after the save completes is exactly what was producing a blank page.
+  const printWin = openBlankPrintWindow();
+  if (!printWin) return;
+
   isSubmitting = true;
   $('generateVoucherBtn').disabled = true;
   $('generateVoucherBtn').textContent = 'Saving…';
@@ -2048,7 +2075,7 @@ $('generateVoucherBtn').onclick = async () => {
     </div>
     ${syncNote ? `<div style="margin-top:16px;font-size:10.5px;color:#a04;">${escapeHtml(syncNote)}</div>` : ''}
   `;
-  openPrintWindow(voucherHtml);
+  writeAndPrint(printWin, voucherHtml);
   isSubmitting = false;
   $('generateVoucherBtn').disabled = false;
   $('generateVoucherBtn').textContent = '🧾 Generate Voucher';
