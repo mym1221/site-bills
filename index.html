@@ -272,21 +272,26 @@
     </div>
 
     <div id="monthlyReportSection">
-      <p class="help-text">Choose a month to generate a printable report — full bill list with a summary you can save as PDF or print.</p>
-      <div class="field">
-        <label for="reportTabSelect">Month</label>
-        <select id="reportTabSelect"></select>
-      </div>
-      <div class="field">
-        <label for="reportVatFilter">Show</label>
-        <select id="reportVatFilter">
-          <option value="all">All bills</option>
-          <option value="withVat">With VAT only</option>
-          <option value="noVat">No VAT / 0 VAT only</option>
-        </select>
-      </div>
-      <button class="btn btn-primary" style="width:100%;" id="generateReportBtn">Generate Report</button>
+      <p class="help-text">Select one or more months for a combined printable report — grouped month by month, sorted by date within each, with a grand total across everything selected.</p>
+      <button class="btn btn-primary" style="width:100%;" id="loadReportMonthsBtn">Load Available Months</button>
       <div class="status-msg" id="reportStatus"></div>
+
+      <div id="reportMonthPicker" style="display:none;margin-top:16px;">
+        <div class="sect-row" style="margin-bottom:8px;">
+          <span class="section-label" style="margin:0;">Select months</span>
+          <a href="#" id="reportSelectAllLink" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600;">Select all</a>
+        </div>
+        <div id="reportMonthCheckboxes"></div>
+        <div class="field" style="margin-top:12px;">
+          <label for="reportVatFilter">Show</label>
+          <select id="reportVatFilter">
+            <option value="all">All bills</option>
+            <option value="withVat">With VAT only</option>
+            <option value="noVat">No VAT / 0 VAT only</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" style="width:100%;" id="showReportBtn">Generate Report</button>
+      </div>
 
       <div id="reportPreviewWrap" style="display:none;margin-top:20px;">
         <div id="reportContent"></div>
@@ -803,10 +808,6 @@ function switchView(name){
   $('view-' + name).classList.add('active');
   document.querySelector(`.nav-btn[data-view="${name}"]`).classList.add('active');
   if (name === 'history') loadHistoryData();
-  if (name === 'reports'){
-    $('reportTabSelect').innerHTML = getModeTabs().map(t => `<option value="${t}">${tabDisplayName(t)}</option>`).join('');
-    if (activeTab) $('reportTabSelect').value = activeTab;
-  }
 }
 $('settingsShortcut').onclick = () => switchView('settings');
 
@@ -1689,29 +1690,132 @@ $('saveAddAnotherBtn').onclick = async () => {
 
 /* ---------------- SYNC ---------------- */
 /* ---------------- REPORTS ---------------- */
-$('generateReportBtn').onclick = async () => {
-  const tab = $('reportTabSelect').value;
-  if (!tab){ setStatus('reportStatus','Choose a month first','err'); return; }
+let reportMonthsData = [];
+
+$('loadReportMonthsBtn').onclick = () => {
+  reportMonthsData = getModeTabs().slice().sort((a,b) =>
+    parseReportDate('01/' + monthNameToNum(a) + '/' + extractYear(a)) -
+    parseReportDate('01/' + monthNameToNum(b) + '/' + extractYear(b))
+  );
+  if (!reportMonthsData.length){ setStatus('reportStatus','No tabs available for this mode yet','err'); return; }
+  $('reportMonthCheckboxes').innerHTML = reportMonthsData.map((t,i) => `
+    <div class="vat-month-check">
+      <input type="checkbox" id="reportMonth${i}" checked data-idx="${i}">
+      <label for="reportMonth${i}">${escapeHtml(tabDisplayName(t))}</label>
+    </div>
+  `).join('');
+  $('reportMonthPicker').style.display = 'block';
+  setStatus('reportStatus','','');
+};
+
+$('reportSelectAllLink').onclick = (e) => {
+  e.preventDefault();
+  const boxes = $('reportMonthCheckboxes').querySelectorAll('input[type=checkbox]');
+  const allChecked = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => b.checked = !allChecked);
+  $('reportSelectAllLink').textContent = allChecked ? 'Select all' : 'Deselect all';
+};
+
+$('showReportBtn').onclick = async () => {
+  const boxes = Array.from($('reportMonthCheckboxes').querySelectorAll('input[type=checkbox]'));
+  const selectedTabs = boxes.filter(b => b.checked).map(b => reportMonthsData[parseInt(b.dataset.idx)]);
+  if (!selectedTabs.length){ setStatus('reportStatus','Select at least one month','err'); return; }
   if (!scriptUrl){ setStatus('reportStatus','Connect to your sheet first (Settings)','err'); return; }
+
   setStatus('reportStatus','Loading bills…','');
   $('reportPreviewWrap').style.display = 'none';
-  $('generateReportBtn').disabled = true;
+  $('showReportBtn').disabled = true;
+  const filter = $('reportVatFilter').value;
+
   try {
-    const res = await fetchWithTimeout(scriptUrl, {
-      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action:'getReportData', tab })
-    });
-    const data = await res.json();
-    if (!data.ok){ setStatus('reportStatus', data.error || 'Failed to load report data','err'); return; }
-    const filter = $('reportVatFilter').value;
-    let rows = data.rows || [];
-    if (filter === 'noVat') rows = rows.filter(r => !parseFloat(r.vat));
-    else if (filter === 'withVat') rows = rows.filter(r => parseFloat(r.vat) > 0);
-    renderReport(tab, rows, filter);
+    const monthsWithRows = [];
+    for (const t of selectedTabs){
+      const res = await fetchWithTimeout(scriptUrl, {
+        method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({ action:'getReportData', tab:t })
+      });
+      const data = await res.json();
+      if (!data.ok){ setStatus('reportStatus', `Failed loading ${tabDisplayName(t)}: ` + (data.error||''), 'err'); return; }
+      let rows = data.rows || [];
+      if (filter === 'noVat') rows = rows.filter(r => !parseFloat(r.vat));
+      else if (filter === 'withVat') rows = rows.filter(r => parseFloat(r.vat) > 0);
+      monthsWithRows.push({ tab: t, rows });
+    }
+    renderMultiMonthReport(monthsWithRows, filter);
     setStatus('reportStatus','','');
   } catch(err){ setStatus('reportStatus','Could not reach your sheet — check connection','err'); }
-  finally { $('generateReportBtn').disabled = false; }
+  finally { $('showReportBtn').disabled = false; }
 };
+
+function renderMultiMonthReport(monthsWithRows, filter){
+  const anyTab = monthsWithRows[0].tab;
+  const isPetty = isPettyTab(anyTab);
+  const isSales = isSalesTab(anyTab);
+  const title = isPetty ? 'Petty Cash Report' : (isSales ? 'Sales Report' : 'Site Expense Report');
+  const col3 = isPetty ? 'Issued By' : (isSales ? 'Invoice No' : 'Bill No');
+  const col4 = isPetty ? 'Member' : (isSales ? 'Client' : 'Vendor');
+  const rowLabel = isPetty ? 'record' : 'bill';
+  const filterLabel = filter === 'noVat' ? ' — No VAT / 0 VAT only' : (filter === 'withVat' ? ' — With VAT only' : '');
+  const genDate = new Date().toLocaleString();
+
+  let totalRows = 0, totalAmt = 0, totalVat = 0;
+  const monthsHtml = monthsWithRows.map(m => {
+    const sorted = m.rows.slice().sort((a,b) => parseReportDate(a.date) - parseReportDate(b.date));
+    const mAmt = sorted.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+    const mVat = sorted.reduce((s,r)=>s+(parseFloat(r.vat)||0),0);
+    totalRows += sorted.length; totalAmt += mAmt; totalVat += mVat;
+
+    return `
+      <div class="report-title" style="font-size:15px;margin-top:24px;">${escapeHtml(tabDisplayName(m.tab))}</div>
+      <div class="report-meta">${sorted.length} ${rowLabel}${sorted.length===1?'':'s'}</div>
+      <div class="report-table-wrap">
+      <table class="report-table">
+        <thead>
+          <tr><th>S/N</th><th>Date</th><th>${col3}</th><th>${col4}</th><th>Note</th><th class="num">Amount</th>${isPetty ? '' : '<th class="num">VAT</th>'}<th class="num">Total</th></tr>
+        </thead>
+        <tbody>
+          ${sorted.length ? sorted.map((r,idx) => `<tr>
+            <td>${idx+1}</td>
+            <td>${escapeHtml(r.date)}</td>
+            <td>${escapeHtml(r.billNo||'')}</td>
+            <td>${escapeHtml(r.vendor||'')}</td>
+            <td>${escapeHtml(r.note||'')}</td>
+            <td class="num">${(parseFloat(r.amount)||0).toFixed(3)}</td>
+            ${isPetty ? '' : `<td class="num">${r.vat!==''&&r.vat!==undefined&&r.vat!==null ? parseFloat(r.vat).toFixed(3) : '—'}</td>`}
+            <td class="num">${(parseFloat(r.total)||0).toFixed(3)}</td>
+          </tr>`).join('') : `<tr><td colspan="${isPetty?6:7}">No matching ${rowLabel}s this month</td></tr>`}
+        </tbody>
+      </table>
+      </div>
+      <div class="report-totals" style="width:280px;margin-top:8px;">
+        <div><span>Month Subtotal</span><span>${mAmt.toFixed(3)}</span></div>
+        ${isPetty ? '' : `<div><span>Month VAT</span><span>${mVat.toFixed(3)}</span></div>`}
+        <div class="grand"><span>Month Total</span><span>${(mAmt+mVat).toFixed(3)}</span></div>
+      </div>
+    `;
+  }).join('');
+
+  const grand = totalAmt + totalVat;
+  $('reportContent').innerHTML = `
+    <div class="report-header">
+      <img src="logo.png" alt="MYM Constructions">
+      <div>
+        <div class="report-company-name">MYM CONSTRUCTIONS</div>
+        <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
+      </div>
+    </div>
+    <div class="report-title">${title} — ${monthsWithRows.length} Month${monthsWithRows.length===1?'':'s'} Combined${filterLabel}</div>
+    <div class="report-meta">Generated ${genDate} · ${totalRows} ${rowLabel}${totalRows===1?'':'s'} total, across ${monthsWithRows.length} month${monthsWithRows.length===1?'':'s'}${filterLabel ? ' · Filtered: ' + filterLabel.replace(' — ','') : ''}</div>
+    ${monthsHtml}
+    <div class="report-totals" style="width:100%;margin-top:26px;border-top:2px solid #1c2128;padding-top:14px;">
+      <div><span>Total ${rowLabel.charAt(0).toUpperCase()+rowLabel.slice(1)}s (all months combined)</span><span>${totalRows}</span></div>
+      <div><span>Subtotal (without VAT)</span><span>${totalAmt.toFixed(3)}</span></div>
+      ${isPetty ? '' : `<div><span>Total VAT</span><span>${totalVat.toFixed(3)}</span></div>`}
+      <div class="grand"><span>Grand Total${isPetty ? '' : ' (with VAT)'}</span><span>${grand.toFixed(3)}</span></div>
+    </div>
+  `;
+  $('reportPreviewWrap').style.display = 'block';
+}
 
 function parseReportDate(str){
   if (!str) return new Date(0);
@@ -1728,61 +1832,6 @@ function parseReportDate(str){
   }
   const d = new Date(s);
   return isNaN(d.getTime()) ? new Date(0) : d;
-}
-
-function renderReport(tab, rows, filter){
-  const sorted = rows.slice().sort((a,b) => parseReportDate(a.date) - parseReportDate(b.date));
-  const isPetty = isPettyTab(tab);
-  const isSales = isSalesTab(tab);
-  const totalAmt = sorted.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
-  const totalVat = sorted.reduce((s,r)=>s+(parseFloat(r.vat)||0),0);
-  const grand = totalAmt + totalVat;
-  const genDate = new Date().toLocaleString();
-
-  const title = isPetty ? 'Petty Cash Report' : (isSales ? 'Sales Report' : 'Site Expense Report');
-  const col3 = isPetty ? 'Issued By' : (isSales ? 'Invoice No' : 'Bill No');
-  const col4 = isPetty ? 'Member' : (isSales ? 'Client' : 'Vendor');
-  const rowLabel = isPetty ? 'record' : 'bill';
-  const filterLabel = filter === 'noVat' ? ' — No VAT / 0 VAT only' : (filter === 'withVat' ? ' — With VAT only' : '');
-
-  $('reportContent').innerHTML = `
-    <div class="report-header">
-      <img src="logo.png" alt="MYM Constructions">
-      <div>
-        <div class="report-company-name">MYM CONSTRUCTIONS</div>
-        <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
-      </div>
-    </div>
-    <div class="report-title">${title} — ${escapeHtml(tabDisplayName(tab))}${filterLabel}</div>
-    <div class="report-meta">Generated ${genDate} · ${sorted.length} ${rowLabel}${sorted.length===1?'':'s'} · sorted by date${filterLabel ? ' · Filtered: ' + filterLabel.replace(' — ','') : ''}</div>
-    <div class="report-table-wrap">
-    <table class="report-table">
-      <thead>
-        <tr><th>S/N</th><th>Date</th><th>${col3}</th><th>${col4}</th><th>Note</th><th class="num">Amount</th>${isPetty ? '' : '<th class="num">VAT</th>'}<th class="num">Total</th></tr>
-      </thead>
-      <tbody>
-        ${sorted.map((r,idx) => `<tr>
-          <td>${idx+1}</td>
-          <td>${escapeHtml(r.date)}</td>
-          <td>${escapeHtml(r.billNo||'')}</td>
-          <td>${escapeHtml(r.vendor||'')}</td>
-          <td>${escapeHtml(r.note||'')}</td>
-          <td class="num">${(parseFloat(r.amount)||0).toFixed(3)}</td>
-          ${isPetty ? '' : `<td class="num">${r.vat!==''&&r.vat!==undefined&&r.vat!==null ? parseFloat(r.vat).toFixed(3) : '—'}</td>`}
-          <td class="num">${(parseFloat(r.total)||0).toFixed(3)}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>
-    </div>
-    <div class="report-totals">
-      <div><span>Total ${isPetty ? 'Records' : 'Bills'}</span><span>${sorted.length}</span></div>
-      ${isPetty ? `<div class="grand"><span>Total Cash Issued</span><span>${totalAmt.toFixed(3)}</span></div>` : `
-      <div><span>Subtotal (without VAT)</span><span>${totalAmt.toFixed(3)}</span></div>
-      <div><span>Total VAT</span><span>${totalVat.toFixed(3)}</span></div>
-      <div class="grand"><span>Grand Total (with VAT)</span><span>${grand.toFixed(3)}</span></div>`}
-    </div>
-  `;
-  $('reportPreviewWrap').style.display = 'block';
 }
 
 $('printReportBtn').onclick = () => openPrintWindow($('reportContent').innerHTML);
