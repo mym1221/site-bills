@@ -252,6 +252,11 @@
     <select id="historyTabFilter" style="width:100%;margin-bottom:6px;">
       <option value="__all">All tabs</option>
     </select>
+    <select id="historyVatFilter" style="width:100%;margin-bottom:6px;">
+      <option value="all">All bills</option>
+      <option value="withVat">With VAT only</option>
+      <option value="noVat">No VAT / 0 VAT only</option>
+    </select>
     <div class="status-msg" id="historyStatus" style="text-align:left;margin-bottom:8px;"></div>
     <div class="entry-list" id="historyEntryList"></div>
   </div>
@@ -271,6 +276,14 @@
       <div class="field">
         <label for="reportTabSelect">Month</label>
         <select id="reportTabSelect"></select>
+      </div>
+      <div class="field">
+        <label for="reportVatFilter">Show</label>
+        <select id="reportVatFilter">
+          <option value="all">All bills</option>
+          <option value="withVat">With VAT only</option>
+          <option value="noVat">No VAT / 0 VAT only</option>
+        </select>
       </div>
       <button class="btn btn-primary" style="width:100%;" id="generateReportBtn">Generate Report</button>
       <div class="status-msg" id="reportStatus"></div>
@@ -975,8 +988,11 @@ function getMergedHistoryList(){
 function renderHistory(){
   const q = $('searchBox').value.trim().toLowerCase();
   const tabFilter = $('historyTabFilter').value;
+  const vatFilter = $('historyVatFilter').value;
   let list = getMergedHistoryList();
   if (tabFilter !== '__all') list = list.filter(e => e.tab === tabFilter);
+  if (vatFilter === 'noVat') list = list.filter(e => !parseFloat(e.vat));
+  else if (vatFilter === 'withVat') list = list.filter(e => parseFloat(e.vat) > 0);
   if (q) list = list.filter(e =>
     (e.vendor||'').toLowerCase().includes(q) ||
     String(e.billNo||'').toLowerCase().includes(q) ||
@@ -993,6 +1009,7 @@ function renderHistory(){
   attachStubHandlers($('historyEntryList'));
 }
 $('searchBox').oninput = renderHistory; // filters the already-loaded list live, no button needed
+$('historyVatFilter').onchange = renderHistory;
 $('historyTabFilter').onchange = () => loadHistoryData();
 
 function attachStubHandlers(container){
@@ -1686,7 +1703,11 @@ $('generateReportBtn').onclick = async () => {
     });
     const data = await res.json();
     if (!data.ok){ setStatus('reportStatus', data.error || 'Failed to load report data','err'); return; }
-    renderReport(tab, data.rows || []);
+    const filter = $('reportVatFilter').value;
+    let rows = data.rows || [];
+    if (filter === 'noVat') rows = rows.filter(r => !parseFloat(r.vat));
+    else if (filter === 'withVat') rows = rows.filter(r => parseFloat(r.vat) > 0);
+    renderReport(tab, rows, filter);
     setStatus('reportStatus','','');
   } catch(err){ setStatus('reportStatus','Could not reach your sheet — check connection','err'); }
   finally { $('generateReportBtn').disabled = false; }
@@ -1709,7 +1730,7 @@ function parseReportDate(str){
   return isNaN(d.getTime()) ? new Date(0) : d;
 }
 
-function renderReport(tab, rows){
+function renderReport(tab, rows, filter){
   const sorted = rows.slice().sort((a,b) => parseReportDate(a.date) - parseReportDate(b.date));
   const isPetty = isPettyTab(tab);
   const isSales = isSalesTab(tab);
@@ -1722,6 +1743,7 @@ function renderReport(tab, rows){
   const col3 = isPetty ? 'Issued By' : (isSales ? 'Invoice No' : 'Bill No');
   const col4 = isPetty ? 'Member' : (isSales ? 'Client' : 'Vendor');
   const rowLabel = isPetty ? 'record' : 'bill';
+  const filterLabel = filter === 'noVat' ? ' — No VAT / 0 VAT only' : (filter === 'withVat' ? ' — With VAT only' : '');
 
   $('reportContent').innerHTML = `
     <div class="report-header">
@@ -1731,8 +1753,8 @@ function renderReport(tab, rows){
         <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
       </div>
     </div>
-    <div class="report-title">${title} — ${escapeHtml(tabDisplayName(tab))}</div>
-    <div class="report-meta">Generated ${genDate} · ${sorted.length} ${rowLabel}${sorted.length===1?'':'s'} · sorted by date</div>
+    <div class="report-title">${title} — ${escapeHtml(tabDisplayName(tab))}${filterLabel}</div>
+    <div class="report-meta">Generated ${genDate} · ${sorted.length} ${rowLabel}${sorted.length===1?'':'s'} · sorted by date${filterLabel ? ' · Filtered: ' + filterLabel.replace(' — ','') : ''}</div>
     <div class="report-table-wrap">
     <table class="report-table">
       <thead>
