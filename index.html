@@ -35,7 +35,7 @@
   .brand span{color:var(--accent);}
   .icon-btn{background:var(--panel);border:1px solid #3a4350;color:#eef1f4;width:40px;height:40px;border-radius:10px;font-size:18px;cursor:pointer;}
 
-  .mode-toggle{display:flex;background:var(--panel);border-radius:12px;padding:4px;margin-bottom:14px;border:1px solid #333c47;}
+  .mode-toggle{display:flex;flex-wrap:wrap;background:var(--panel);border-radius:12px;padding:4px;margin-bottom:14px;border:1px solid #333c47;gap:4px;}
   .mode-btn{flex:1;background:none;border:none;color:var(--muted);padding:10px 6px;border-radius:9px;font-family:'Oswald',sans-serif;font-weight:600;font-size:13px;letter-spacing:.02em;cursor:pointer;}
   .mode-btn.active{background:var(--accent);color:#1c1200;}
   .vat-month-check{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid #333c47;}
@@ -269,6 +269,7 @@
       <button class="mode-btn active" id="reportModeMonthlyBtn">Monthly Report</button>
       <button class="mode-btn" id="reportModeVatBtn">VAT Comparison</button>
       <button class="mode-btn" id="reportModePettyBtn">Petty Cash</button>
+      <button class="mode-btn" id="reportModeTopBtn">Top Vendors</button>
     </div>
 
     <div id="monthlyReportSection">
@@ -296,6 +297,7 @@
       <div id="reportPreviewWrap" style="display:none;margin-top:20px;">
         <div id="reportContent"></div>
         <button class="add-btn" id="printReportBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px;" id="exportReportCsvBtn">⬇ Export as CSV (Excel)</button>
       </div>
     </div>
 
@@ -341,6 +343,27 @@
       <div id="pettyLedgerWrap" style="display:none;margin-top:20px;">
         <div id="pettyLedgerContent"></div>
         <button class="add-btn" id="printPettyLedgerBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
+      </div>
+    </div>
+
+    <div id="topVendorsSection" style="display:none;">
+      <p class="help-text">Ranks every vendor (or client, in Sales mode) by total spend across the months you pick — shows you exactly where your money is concentrated.</p>
+      <button class="btn btn-primary" style="width:100%;" id="loadTopVendorsMonthsBtn">Load Available Months</button>
+      <div class="status-msg" id="topVendorsStatus"></div>
+
+      <div id="topVendorsMonthPicker" style="display:none;margin-top:16px;">
+        <div class="sect-row" style="margin-bottom:8px;">
+          <span class="section-label" style="margin:0;">Select months</span>
+          <a href="#" id="topVendorsSelectAllLink" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600;">Select all</a>
+        </div>
+        <div id="topVendorsMonthCheckboxes"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px;" id="showTopVendorsBtn">Show Ranking</button>
+      </div>
+
+      <div id="topVendorsWrap" style="display:none;margin-top:20px;">
+        <div id="topVendorsContent"></div>
+        <button class="add-btn" id="printTopVendorsBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px;" id="exportTopVendorsCsvBtn">⬇ Export as CSV (Excel)</button>
       </div>
     </div>
   </div>
@@ -1752,7 +1775,10 @@ $('showReportBtn').onclick = async () => {
   finally { $('showReportBtn').disabled = false; }
 };
 
+let lastReportData = null; // {monthsWithRows, filter} — kept so CSV export can reuse the same data just rendered
+
 function renderMultiMonthReport(monthsWithRows, filter){
+  lastReportData = { monthsWithRows, filter };
   const anyTab = monthsWithRows[0].tab;
   const isPetty = isPettyTab(anyTab);
   const isSales = isSalesTab(anyTab);
@@ -1841,10 +1867,175 @@ function parseReportDate(str){
 
 $('printReportBtn').onclick = () => openPrintWindow($('reportContent').innerHTML);
 
+// Turns an array of row objects into a downloadable CSV file — properly quotes fields
+// containing commas/quotes/newlines so it opens cleanly in Excel or Google Sheets.
+function csvCell(v){
+  const s = String(v === null || v === undefined ? '' : v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+function downloadCsv(filename, rows2d){
+  const csv = rows2d.map(row => row.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }); // BOM so Excel reads UTF-8 correctly
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+$('exportReportCsvBtn').onclick = () => {
+  if (!lastReportData){ setStatus('reportStatus','Generate a report first','err'); return; }
+  const { monthsWithRows, filter } = lastReportData;
+  const anyTab = monthsWithRows[0].tab;
+  const isPetty = isPettyTab(anyTab);
+  const col3 = isPetty ? 'Issued By' : (isSalesTab(anyTab) ? 'Invoice No' : 'Bill No');
+  const col4 = isPetty ? 'Member' : (isSalesTab(anyTab) ? 'Client' : 'Vendor');
+  const header = ['Month','S/N','Date',col3,col4,'Note','Amount', ...(isPetty?[]:['VAT']), 'Total'];
+  const out = [header];
+  monthsWithRows.forEach(m => {
+    const sorted = m.rows.slice().sort((a,b) => parseReportDate(a.date) - parseReportDate(b.date));
+    sorted.forEach((r,idx) => {
+      const row = [tabDisplayName(m.tab), idx+1, r.date, r.billNo||'', r.vendor||'', r.note||'', (parseFloat(r.amount)||0).toFixed(3)];
+      if (!isPetty) row.push(r.vat!==''&&r.vat!==undefined&&r.vat!==null ? parseFloat(r.vat).toFixed(3) : '0.000');
+      row.push((parseFloat(r.total)||0).toFixed(3));
+      out.push(row);
+    });
+  });
+  const stamp = new Date().toISOString().slice(0,10);
+  downloadCsv(`MYM-report-${stamp}.csv`, out);
+};
+
+/* ---------------- TOP VENDORS / CLIENTS ---------------- */
+let topVendorsMonthsData = [];
+let lastTopVendorsData = null; // kept for CSV export
+
+$('loadTopVendorsMonthsBtn').onclick = async () => {
+  $('loadTopVendorsMonthsBtn').disabled = true;
+  setStatus('topVendorsStatus','Checking for the latest tabs…','');
+  await refreshTabsList();
+  $('loadTopVendorsMonthsBtn').disabled = false;
+  topVendorsMonthsData = getModeTabs().slice().sort((a,b) =>
+    parseReportDate('01/' + monthNameToNum(a) + '/' + extractYear(a)) -
+    parseReportDate('01/' + monthNameToNum(b) + '/' + extractYear(b))
+  );
+  if (!topVendorsMonthsData.length){ setStatus('topVendorsStatus','No tabs available for this mode yet','err'); return; }
+  $('topVendorsMonthCheckboxes').innerHTML = topVendorsMonthsData.map((t,i) => `
+    <div class="vat-month-check">
+      <input type="checkbox" id="topVendorsMonth${i}" checked data-idx="${i}">
+      <label for="topVendorsMonth${i}">${escapeHtml(tabDisplayName(t))}</label>
+    </div>
+  `).join('');
+  $('topVendorsMonthPicker').style.display = 'block';
+  setStatus('topVendorsStatus','','');
+};
+
+$('topVendorsSelectAllLink').onclick = (e) => {
+  e.preventDefault();
+  const boxes = $('topVendorsMonthCheckboxes').querySelectorAll('input[type=checkbox]');
+  const allChecked = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => b.checked = !allChecked);
+  $('topVendorsSelectAllLink').textContent = allChecked ? 'Select all' : 'Deselect all';
+};
+
+$('showTopVendorsBtn').onclick = async () => {
+  const boxes = Array.from($('topVendorsMonthCheckboxes').querySelectorAll('input[type=checkbox]'));
+  const selectedTabs = boxes.filter(b => b.checked).map(b => topVendorsMonthsData[parseInt(b.dataset.idx)]);
+  if (!selectedTabs.length){ setStatus('topVendorsStatus','Select at least one month','err'); return; }
+  if (!scriptUrl){ setStatus('topVendorsStatus','Connect to your sheet first (Settings)','err'); return; }
+
+  setStatus('topVendorsStatus','Loading bills…','');
+  $('topVendorsWrap').style.display = 'none';
+  $('showTopVendorsBtn').disabled = true;
+
+  try {
+    const byVendor = {}; // name -> {count, amount, vat, total}
+    for (const t of selectedTabs){
+      const res = await fetchWithTimeout(scriptUrl, {
+        method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({ action:'getReportData', tab:t })
+      });
+      const data = await res.json();
+      if (!data.ok){ setStatus('topVendorsStatus', `Failed loading ${tabDisplayName(t)}: ` + (data.error||''), 'err'); return; }
+      (data.rows || []).forEach(r => {
+        const name = (r.vendor || '(blank)').trim() || '(blank)';
+        if (!byVendor[name]) byVendor[name] = { count:0, amount:0, vat:0, total:0 };
+        byVendor[name].count += 1;
+        byVendor[name].amount += parseFloat(r.amount) || 0;
+        byVendor[name].vat += parseFloat(r.vat) || 0;
+        byVendor[name].total += parseFloat(r.total) || 0;
+      });
+    }
+    const ranked = Object.keys(byVendor).map(name => ({ name, ...byVendor[name] })).sort((a,b) => b.total - a.total);
+    renderTopVendors(ranked, selectedTabs);
+    setStatus('topVendorsStatus','','');
+  } catch(err){ setStatus('topVendorsStatus','Could not reach your sheet — check connection','err'); }
+  finally { $('showTopVendorsBtn').disabled = false; }
+};
+
+function renderTopVendors(ranked, selectedTabs){
+  lastTopVendorsData = ranked;
+  const anyTab = selectedTabs[0];
+  const isPetty = isPettyTab(anyTab);
+  const isSales = isSalesTab(anyTab);
+  const nameLabel = isPetty ? 'Member' : (isSales ? 'Client' : 'Vendor');
+  const genDate = new Date().toLocaleString();
+  const grandTotal = ranked.reduce((s,r)=>s+r.total,0);
+  const grandAmount = ranked.reduce((s,r)=>s+r.amount,0);
+  const grandVat = ranked.reduce((s,r)=>s+r.vat,0);
+  const grandCount = ranked.reduce((s,r)=>s+r.count,0);
+
+  $('topVendorsContent').innerHTML = `
+    <div class="report-header">
+      <img src="logo.png" alt="MYM Constructions">
+      <div>
+        <div class="report-company-name">MYM CONSTRUCTIONS</div>
+        <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
+      </div>
+    </div>
+    <div class="report-title">Top ${nameLabel}s by Spend</div>
+    <div class="report-meta">Generated ${genDate} · ${selectedTabs.length} month${selectedTabs.length===1?'':'s'} · ${ranked.length} ${nameLabel.toLowerCase()}${ranked.length===1?'':'s'}</div>
+    <div class="report-table-wrap">
+    <table class="report-table">
+      <thead>
+        <tr><th>Rank</th><th>${nameLabel}</th><th class="num">Bills</th><th class="num">Amount</th>${isPetty?'':'<th class="num">VAT</th>'}<th class="num">Total</th><th class="num">% of Total</th></tr>
+      </thead>
+      <tbody>
+        ${ranked.map((r,i) => `<tr>
+          <td>${i+1}</td>
+          <td>${escapeHtml(r.name)}</td>
+          <td class="num">${r.count}</td>
+          <td class="num">${r.amount.toFixed(3)}</td>
+          ${isPetty?'':'<td class="num">'+r.vat.toFixed(3)+'</td>'}
+          <td class="num">${r.total.toFixed(3)}</td>
+          <td class="num">${grandTotal ? ((r.total/grandTotal)*100).toFixed(1) : '0.0'}%</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+    <div class="report-totals" style="width:100%;margin-top:20px;">
+      <div><span>Total ${isPetty?'Records':'Bills'}</span><span>${grandCount}</span></div>
+      <div><span>Subtotal (without VAT)</span><span>${grandAmount.toFixed(3)}</span></div>
+      ${isPetty?'':'<div><span>Total VAT</span><span>'+grandVat.toFixed(3)+'</span></div>'}
+      <div class="grand"><span>Grand Total</span><span>${grandTotal.toFixed(3)}</span></div>
+    </div>
+  `;
+  $('topVendorsWrap').style.display = 'block';
+}
+
+$('printTopVendorsBtn').onclick = () => openPrintWindow($('topVendorsContent').innerHTML);
+
+$('exportTopVendorsCsvBtn').onclick = () => {
+  if (!lastTopVendorsData){ setStatus('topVendorsStatus','Generate a ranking first','err'); return; }
+  const out = [['Rank','Name','Bills','Amount','VAT','Total']];
+  lastTopVendorsData.forEach((r,i) => out.push([i+1, r.name, r.count, r.amount.toFixed(3), r.vat.toFixed(3), r.total.toFixed(3)]));
+  const stamp = new Date().toISOString().slice(0,10);
+  downloadCsv(`MYM-top-vendors-${stamp}.csv`, out);
+};
+
 /* ---------------- REPORT MODE TOGGLE (3-way) ---------------- */
 function showReportSection(which){
-  const btns = { monthly:$('reportModeMonthlyBtn'), vat:$('reportModeVatBtn'), petty:$('reportModePettyBtn') };
-  const sections = { monthly:$('monthlyReportSection'), vat:$('vatComparisonSection'), petty:$('pettyLedgerSection') };
+  const btns = { monthly:$('reportModeMonthlyBtn'), vat:$('reportModeVatBtn'), petty:$('reportModePettyBtn'), top:$('reportModeTopBtn') };
+  const sections = { monthly:$('monthlyReportSection'), vat:$('vatComparisonSection'), petty:$('pettyLedgerSection'), top:$('topVendorsSection') };
   Object.keys(btns).forEach(k => btns[k].classList.toggle('active', k === which));
   Object.keys(sections).forEach(k => sections[k].style.display = k === which ? 'block' : 'none');
   if (which === 'petty'){ populatePettyLedgerMemberSelect(); loadCompanyFloat(); }
@@ -1852,6 +2043,7 @@ function showReportSection(which){
 $('reportModeMonthlyBtn').onclick = () => showReportSection('monthly');
 $('reportModeVatBtn').onclick = () => showReportSection('vat');
 $('reportModePettyBtn').onclick = () => showReportSection('petty');
+$('reportModeTopBtn').onclick = () => showReportSection('top');
 
 /* ---------------- VAT COMPARISON ---------------- */
 
