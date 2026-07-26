@@ -892,6 +892,7 @@ function switchMode(newMode){
   updateModeUI();
   render();
   refreshHome();
+  refreshTabsList().then(() => { populateTabSelects(); render(); });
 }
 $('modePurchasesBtn').onclick = () => switchMode('purchases');
 $('modeSalesBtn').onclick = () => switchMode('sales');
@@ -1692,7 +1693,11 @@ $('saveAddAnotherBtn').onclick = async () => {
 /* ---------------- REPORTS ---------------- */
 let reportMonthsData = [];
 
-$('loadReportMonthsBtn').onclick = () => {
+$('loadReportMonthsBtn').onclick = async () => {
+  $('loadReportMonthsBtn').disabled = true;
+  setStatus('reportStatus','Checking for the latest tabs…','');
+  await refreshTabsList();
+  $('loadReportMonthsBtn').disabled = false;
   reportMonthsData = getModeTabs().slice().sort((a,b) =>
     parseReportDate('01/' + monthNameToNum(a) + '/' + extractYear(a)) -
     parseReportDate('01/' + monthNameToNum(b) + '/' + extractYear(b))
@@ -2198,6 +2203,24 @@ $('sigSaveBtn').onclick = () => {
 };
 
 /* Pulls real bill data for one tab from the Sheet — shared source of truth for Home AND History */
+// Re-checks the real list of tabs from the Sheet — without this, a tab created on a
+// different device (or directly in Google Sheets) would never show up here, since the
+// local cache only otherwise updates on first-ever load or when creating a tab yourself.
+async function refreshTabsList(){
+  if (!scriptUrl || !navigator.onLine) return false;
+  try {
+    const res = await fetchWithTimeout(scriptUrl + '?action=tabs', {}, 15000);
+    const data = await res.json();
+    if (data.ok && Array.isArray(data.tabs)){
+      tabs = data.tabs;
+      saveTabs();
+      populateTabSelects();
+      return true;
+    }
+  } catch(err){ /* keep existing cached list as fallback */ }
+  return false;
+}
+
 async function fetchTabFromSheet(tab){
   if (!scriptUrl || !tab || !navigator.onLine) return false;
   try {
@@ -2293,7 +2316,7 @@ if (scriptUrl && tabs.length){ render(); refreshHome(); }
 else if (scriptUrl){
   fetchWithTimeout(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); refreshHome(); } }).catch(()=>render());
 } else { render(); switchView('settings'); }
-setInterval(() => { syncPending(false); refreshHome(); }, 30000);
+setInterval(() => { syncPending(false); refreshHome(); refreshTabsList(); }, 30000);
 </script>
 </body>
 </html>
