@@ -270,6 +270,7 @@
       <button class="mode-btn" id="reportModeVatBtn">VAT Comparison</button>
       <button class="mode-btn" id="reportModePettyBtn">Petty Cash</button>
       <button class="mode-btn" id="reportModeTopBtn">Top Vendors</button>
+      <button class="mode-btn" id="reportModeCashBtn">Cash Flow</button>
     </div>
 
     <div id="monthlyReportSection">
@@ -289,6 +290,14 @@
             <option value="all">All bills</option>
             <option value="withVat">With VAT only</option>
             <option value="noVat">No VAT / 0 VAT only</option>
+          </select>
+        </div>
+        <div class="field" id="reportPaidViaFilterWrap" style="display:none;">
+          <label for="reportPaidViaFilter">Paid Via</label>
+          <select id="reportPaidViaFilter">
+            <option value="all">Any payment method</option>
+            <option value="company">Company Account only</option>
+            <option value="petty">Petty Cash only (any member)</option>
           </select>
         </div>
         <button class="btn btn-primary" style="width:100%;" id="showReportBtn">Generate Report</button>
@@ -364,6 +373,27 @@
         <div id="topVendorsContent"></div>
         <button class="add-btn" id="printTopVendorsBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
         <button class="btn btn-ghost" style="width:100%;margin-top:8px;" id="exportTopVendorsCsvBtn">⬇ Export as CSV (Excel)</button>
+      </div>
+    </div>
+
+    <div id="cashFlowSection" style="display:none;">
+      <p class="help-text">Money In (Sales) vs Money Out (Purchases paid directly + Petty Cash issued, counted the moment it's handed over) — a real cash position, separate from your VAT return.</p>
+      <button class="btn btn-primary" style="width:100%;" id="loadCashFlowBtn">Load Available Months</button>
+      <div class="status-msg" id="cashFlowStatus"></div>
+
+      <div id="cashFlowMonthPicker" style="display:none;margin-top:16px;">
+        <div class="sect-row" style="margin-bottom:8px;">
+          <span class="section-label" style="margin:0;">Select months</span>
+          <a href="#" id="cashFlowSelectAllLink" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600;">Select all</a>
+        </div>
+        <div id="cashFlowMonthCheckboxes"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px;" id="showCashFlowBtn">Show Cash Flow</button>
+      </div>
+
+      <div id="cashFlowWrap" style="display:none;margin-top:20px;">
+        <div id="cashFlowContent"></div>
+        <button class="add-btn" id="printCashFlowBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px;" id="exportCashFlowCsvBtn">⬇ Export as CSV (Excel)</button>
       </div>
     </div>
   </div>
@@ -1733,6 +1763,7 @@ $('loadReportMonthsBtn').onclick = async () => {
     </div>
   `).join('');
   $('reportMonthPicker').style.display = 'block';
+  $('reportPaidViaFilterWrap').style.display = (mode === 'purchases') ? 'block' : 'none';
   setStatus('reportStatus','','');
 };
 
@@ -1754,6 +1785,7 @@ $('showReportBtn').onclick = async () => {
   $('reportPreviewWrap').style.display = 'none';
   $('showReportBtn').disabled = true;
   const filter = $('reportVatFilter').value;
+  const paidViaFilter = (mode === 'purchases') ? $('reportPaidViaFilter').value : 'all';
 
   try {
     const monthsWithRows = [];
@@ -1767,6 +1799,8 @@ $('showReportBtn').onclick = async () => {
       let rows = data.rows || [];
       if (filter === 'noVat') rows = rows.filter(r => !parseFloat(r.vat));
       else if (filter === 'withVat') rows = rows.filter(r => parseFloat(r.vat) > 0);
+      if (paidViaFilter === 'company') rows = rows.filter(r => !r.paidVia || r.paidVia === 'Company Account');
+      else if (paidViaFilter === 'petty') rows = rows.filter(r => r.paidVia && r.paidVia.indexOf('Petty Cash') === 0);
       monthsWithRows.push({ tab: t, rows });
     }
     renderMultiMonthReport(monthsWithRows, filter);
@@ -2032,10 +2066,117 @@ $('exportTopVendorsCsvBtn').onclick = () => {
   downloadCsv(`MYM-top-vendors-${stamp}.csv`, out);
 };
 
+/* ---------------- CASH FLOW ---------------- */
+let cashFlowMonthsData = [];
+let lastCashFlowData = null;
+
+$('loadCashFlowBtn').onclick = async () => {
+  if (!scriptUrl){ setStatus('cashFlowStatus','Connect to your sheet first (Settings)','err'); return; }
+  setStatus('cashFlowStatus','Loading cash flow data from every month…','');
+  $('cashFlowMonthPicker').style.display = 'none';
+  $('cashFlowWrap').style.display = 'none';
+  $('loadCashFlowBtn').disabled = true;
+  try {
+    const res = await fetchWithTimeout(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'getCashFlow' })
+    }, 30000);
+    const data = await res.json();
+    if (!data.ok){ setStatus('cashFlowStatus', data.error || 'Failed to load cash flow','err'); return; }
+    cashFlowMonthsData = (data.months || []).sort((a,b) =>
+      parseReportDate('01/' + monthNameToNum(a.month) + '/' + extractYear(a.month)) -
+      parseReportDate('01/' + monthNameToNum(b.month) + '/' + extractYear(b.month))
+    );
+    if (!cashFlowMonthsData.length){ setStatus('cashFlowStatus','No data found in any month yet.','err'); return; }
+    $('cashFlowMonthCheckboxes').innerHTML = cashFlowMonthsData.map((m,i) => `
+      <div class="vat-month-check">
+        <input type="checkbox" id="cashFlowMonth${i}" checked data-idx="${i}">
+        <label for="cashFlowMonth${i}">${escapeHtml(m.month)}</label>
+        <span class="vat-vals">In ${m.moneyIn.toFixed(3)} · Out ${m.moneyOut.toFixed(3)}</span>
+      </div>
+    `).join('');
+    $('cashFlowMonthPicker').style.display = 'block';
+    setStatus('cashFlowStatus','','');
+  } catch(err){ setStatus('cashFlowStatus','Could not reach your sheet — check connection','err'); }
+  finally { $('loadCashFlowBtn').disabled = false; }
+};
+
+$('cashFlowSelectAllLink').onclick = (e) => {
+  e.preventDefault();
+  const boxes = $('cashFlowMonthCheckboxes').querySelectorAll('input[type=checkbox]');
+  const allChecked = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => b.checked = !allChecked);
+  $('cashFlowSelectAllLink').textContent = allChecked ? 'Select all' : 'Deselect all';
+};
+
+$('showCashFlowBtn').onclick = () => {
+  const boxes = Array.from($('cashFlowMonthCheckboxes').querySelectorAll('input[type=checkbox]'));
+  const selected = boxes.filter(b => b.checked).map(b => cashFlowMonthsData[parseInt(b.dataset.idx)]);
+  if (!selected.length){ setStatus('cashFlowStatus','Select at least one month first','err'); return; }
+  renderCashFlow(selected);
+};
+
+function renderCashFlow(months){
+  lastCashFlowData = months;
+  const genDate = new Date().toLocaleString();
+  const totalIn = months.reduce((s,m)=>s+m.moneyIn,0);
+  const totalPurchasesOut = months.reduce((s,m)=>s+m.purchasesOut,0);
+  const totalPettyOut = months.reduce((s,m)=>s+m.pettyIssued,0);
+  const totalOut = months.reduce((s,m)=>s+m.moneyOut,0);
+  const totalNet = totalIn - totalOut;
+
+  $('cashFlowContent').innerHTML = `
+    <div class="report-header">
+      <img src="logo.png" alt="MYM Constructions">
+      <div>
+        <div class="report-company-name">MYM CONSTRUCTIONS</div>
+        <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
+      </div>
+    </div>
+    <div class="report-title">Cash Flow — Money In vs Money Out</div>
+    <div class="report-meta">Generated ${genDate} · ${months.length} month${months.length===1?'':'s'} selected · Petty Cash counted as spent when issued</div>
+    <div class="report-table-wrap">
+    <table class="report-table" style="min-width:600px;">
+      <thead>
+        <tr><th>Month</th><th class="num">Money In (Sales)</th><th class="num">Purchases Out</th><th class="num">Petty Cash Issued</th><th class="num">Total Out</th><th class="num">Net</th></tr>
+      </thead>
+      <tbody>
+        ${months.map(m => `<tr>
+          <td>${escapeHtml(m.month)}</td>
+          <td class="num">${m.moneyIn.toFixed(3)}</td>
+          <td class="num">${m.purchasesOut.toFixed(3)}</td>
+          <td class="num">${m.pettyIssued.toFixed(3)}</td>
+          <td class="num">${m.moneyOut.toFixed(3)}</td>
+          <td class="num">${m.net.toFixed(3)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+    <div class="report-totals" style="width:100%;">
+      <div><span>Total Money In (Sales)</span><span>${totalIn.toFixed(3)}</span></div>
+      <div><span>Total Purchases Out (direct/company account)</span><span>${totalPurchasesOut.toFixed(3)}</span></div>
+      <div><span>Total Petty Cash Issued</span><span>${totalPettyOut.toFixed(3)}</span></div>
+      <div><span>Total Money Out</span><span>${totalOut.toFixed(3)}</span></div>
+      <div class="grand"><span>Net Cash Flow ${totalNet >= 0 ? '(Positive)' : '(Negative)'}</span><span>${totalNet.toFixed(3)}</span></div>
+    </div>
+  `;
+  $('cashFlowWrap').style.display = 'block';
+}
+
+$('printCashFlowBtn').onclick = () => openPrintWindow($('cashFlowContent').innerHTML);
+
+$('exportCashFlowCsvBtn').onclick = () => {
+  if (!lastCashFlowData){ setStatus('cashFlowStatus','Generate a cash flow view first','err'); return; }
+  const out = [['Month','Money In','Purchases Out','Petty Cash Issued','Total Out','Net']];
+  lastCashFlowData.forEach(m => out.push([m.month, m.moneyIn.toFixed(3), m.purchasesOut.toFixed(3), m.pettyIssued.toFixed(3), m.moneyOut.toFixed(3), m.net.toFixed(3)]));
+  const stamp = new Date().toISOString().slice(0,10);
+  downloadCsv(`MYM-cash-flow-${stamp}.csv`, out);
+};
+
 /* ---------------- REPORT MODE TOGGLE (3-way) ---------------- */
 function showReportSection(which){
-  const btns = { monthly:$('reportModeMonthlyBtn'), vat:$('reportModeVatBtn'), petty:$('reportModePettyBtn'), top:$('reportModeTopBtn') };
-  const sections = { monthly:$('monthlyReportSection'), vat:$('vatComparisonSection'), petty:$('pettyLedgerSection'), top:$('topVendorsSection') };
+  const btns = { monthly:$('reportModeMonthlyBtn'), vat:$('reportModeVatBtn'), petty:$('reportModePettyBtn'), top:$('reportModeTopBtn'), cash:$('reportModeCashBtn') };
+  const sections = { monthly:$('monthlyReportSection'), vat:$('vatComparisonSection'), petty:$('pettyLedgerSection'), top:$('topVendorsSection'), cash:$('cashFlowSection') };
   Object.keys(btns).forEach(k => btns[k].classList.toggle('active', k === which));
   Object.keys(sections).forEach(k => sections[k].style.display = k === which ? 'block' : 'none');
   if (which === 'petty'){ populatePettyLedgerMemberSelect(); loadCompanyFloat(); }
@@ -2044,6 +2185,7 @@ $('reportModeMonthlyBtn').onclick = () => showReportSection('monthly');
 $('reportModeVatBtn').onclick = () => showReportSection('vat');
 $('reportModePettyBtn').onclick = () => showReportSection('petty');
 $('reportModeTopBtn').onclick = () => showReportSection('top');
+$('reportModeCashBtn').onclick = () => showReportSection('cash');
 
 /* ---------------- VAT COMPARISON ---------------- */
 
