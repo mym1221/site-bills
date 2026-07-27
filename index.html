@@ -257,6 +257,10 @@
       <option value="withVat">With VAT only</option>
       <option value="noVat">No VAT / 0 VAT only</option>
     </select>
+    <label style="display:flex;align-items:center;gap:8px;padding:9px 2px;margin-bottom:6px;font-size:13px;color:#eef1f4;cursor:pointer;">
+      <input type="checkbox" id="historyDupAmountFilter" style="width:17px;height:17px;accent-color:var(--accent);">
+      Show only repeated amounts (quick duplicate check)
+    </label>
     <div class="status-msg" id="historyStatus" style="text-align:left;margin-bottom:8px;"></div>
     <div class="entry-list" id="historyEntryList"></div>
   </div>
@@ -1075,16 +1079,27 @@ function renderHistory(){
     String(e.billNo||'').toLowerCase().includes(q) ||
     (e.note||'').toLowerCase().includes(q)
   );
-  list.sort((a,b) => {
-    const ak = (a.sn === null || a.sn === undefined) ? Infinity : a.sn;
-    const bk = (b.sn === null || b.sn === undefined) ? Infinity : b.sn;
-    if (ak !== bk) return bk - ak;
-    return (b.createdAt||0) - (a.createdAt||0);
-  });
+  if ($('historyDupAmountFilter').checked){
+    const counts = {};
+    list.forEach(e => {
+      const key = (parseFloat(e.total)||0).toFixed(3);
+      counts[key] = (counts[key]||0) + 1;
+    });
+    list = list.filter(e => counts[(parseFloat(e.total)||0).toFixed(3)] > 1);
+    list.sort((a,b) => (parseFloat(a.total)||0) - (parseFloat(b.total)||0)); // group matching amounts together
+  } else {
+    list.sort((a,b) => {
+      const ak = (a.sn === null || a.sn === undefined) ? Infinity : a.sn;
+      const bk = (b.sn === null || b.sn === undefined) ? Infinity : b.sn;
+      if (ak !== bk) return bk - ak;
+      return (b.createdAt||0) - (a.createdAt||0);
+    });
+  }
   $('historyEntryList').innerHTML = list.length ? list.map(stubHtml).join('') :
-    '<div class="empty">No bills match.</div>';
+    ($('historyDupAmountFilter').checked ? '<div class="empty">No repeated amounts found in this view.</div>' : '<div class="empty">No bills match.</div>');
   attachStubHandlers($('historyEntryList'));
 }
+$('historyDupAmountFilter').onchange = renderHistory;
 $('searchBox').oninput = renderHistory; // filters the already-loaded list live, no button needed
 $('historyVatFilter').onchange = renderHistory;
 $('historyTabFilter').onchange = () => loadHistoryData();
