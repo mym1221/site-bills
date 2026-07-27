@@ -271,6 +271,7 @@
       <button class="mode-btn" id="reportModePettyBtn">Petty Cash</button>
       <button class="mode-btn" id="reportModeTopBtn">Top Vendors</button>
       <button class="mode-btn" id="reportModeCashBtn">Cash Flow</button>
+      <button class="mode-btn" id="reportModeDupBtn">Duplicates</button>
     </div>
 
     <div id="monthlyReportSection">
@@ -394,6 +395,27 @@
         <div id="cashFlowContent"></div>
         <button class="add-btn" id="printCashFlowBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
         <button class="btn btn-ghost" style="width:100%;margin-top:8px;" id="exportCashFlowCsvBtn">⬇ Export as CSV (Excel)</button>
+      </div>
+    </div>
+
+    <div id="dupFinderSection" style="display:none;">
+      <p class="help-text">Checks each month you pick for two things: the same Bill No used twice (almost always a real mistake), and same Vendor + Amount + Date (could be real, could be a coincidence — worth a look). Never deletes anything — just shows you what to check.</p>
+      <button class="btn btn-primary" style="width:100%;" id="loadDupMonthsBtn">Load Available Months</button>
+      <div class="status-msg" id="dupFinderStatus"></div>
+
+      <div id="dupMonthPicker" style="display:none;margin-top:16px;">
+        <div class="sect-row" style="margin-bottom:8px;">
+          <span class="section-label" style="margin:0;">Select months</span>
+          <a href="#" id="dupSelectAllLink" style="font-size:11px;color:var(--accent);text-decoration:none;font-weight:600;">Select all</a>
+        </div>
+        <div id="dupMonthCheckboxes"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:12px;" id="showDupFinderBtn">Find Duplicates</button>
+      </div>
+
+      <div id="dupFinderWrap" style="display:none;margin-top:20px;">
+        <div id="dupFinderContent"></div>
+        <button class="add-btn" id="printDupFinderBtn" style="margin-top:16px;">🖨 Print / Save as PDF</button>
+        <button class="btn btn-ghost" style="width:100%;margin-top:8px;" id="exportDupFinderCsvBtn">⬇ Export as CSV (Excel)</button>
       </div>
     </div>
   </div>
@@ -2173,10 +2195,145 @@ $('exportCashFlowCsvBtn').onclick = () => {
   downloadCsv(`MYM-cash-flow-${stamp}.csv`, out);
 };
 
+/* ---------------- DUPLICATE FINDER ---------------- */
+let dupMonthsData = [];
+let lastDupGroups = null;
+
+$('loadDupMonthsBtn').onclick = async () => {
+  $('loadDupMonthsBtn').disabled = true;
+  setStatus('dupFinderStatus','Checking for the latest tabs…','');
+  await refreshTabsList();
+  $('loadDupMonthsBtn').disabled = false;
+  dupMonthsData = getModeTabs().slice().sort((a,b) =>
+    parseReportDate('01/' + monthNameToNum(a) + '/' + extractYear(a)) -
+    parseReportDate('01/' + monthNameToNum(b) + '/' + extractYear(b))
+  );
+  if (!dupMonthsData.length){ setStatus('dupFinderStatus','No tabs available for this mode yet','err'); return; }
+  $('dupMonthCheckboxes').innerHTML = dupMonthsData.map((t,i) => `
+    <div class="vat-month-check">
+      <input type="checkbox" id="dupMonth${i}" checked data-idx="${i}">
+      <label for="dupMonth${i}">${escapeHtml(tabDisplayName(t))}</label>
+    </div>
+  `).join('');
+  $('dupMonthPicker').style.display = 'block';
+  setStatus('dupFinderStatus','','');
+};
+
+$('dupSelectAllLink').onclick = (e) => {
+  e.preventDefault();
+  const boxes = $('dupMonthCheckboxes').querySelectorAll('input[type=checkbox]');
+  const allChecked = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => b.checked = !allChecked);
+  $('dupSelectAllLink').textContent = allChecked ? 'Select all' : 'Deselect all';
+};
+
+$('showDupFinderBtn').onclick = async () => {
+  const boxes = Array.from($('dupMonthCheckboxes').querySelectorAll('input[type=checkbox]'));
+  const selectedTabs = boxes.filter(b => b.checked).map(b => dupMonthsData[parseInt(b.dataset.idx)]);
+  if (!selectedTabs.length){ setStatus('dupFinderStatus','Select at least one month','err'); return; }
+  if (!scriptUrl){ setStatus('dupFinderStatus','Connect to your sheet first (Settings)','err'); return; }
+
+  setStatus('dupFinderStatus','Checking for duplicates…','');
+  $('dupFinderWrap').style.display = 'none';
+  $('showDupFinderBtn').disabled = true;
+
+  try {
+    const allGroups = [];
+    for (const t of selectedTabs){
+      const res = await fetchWithTimeout(scriptUrl, {
+        method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({ action:'getReportData', tab:t })
+      });
+      const data = await res.json();
+      if (!data.ok){ setStatus('dupFinderStatus', `Failed loading ${tabDisplayName(t)}: ` + (data.error||''), 'err'); return; }
+      const rows = data.rows || [];
+
+      // Same Bill No twice in this tab — high confidence, real bill numbers rarely repeat by coincidence.
+      // Skip blanks and AUTO-N numbers (those are guaranteed unique by design, never a real signal).
+      const byBillNo = {};
+      rows.forEach(r => {
+        const bn = String(r.billNo||'').trim();
+        if (!bn || bn.indexOf('AUTO-') === 0) return;
+        (byBillNo[bn] = byBillNo[bn] || []).push(r);
+      });
+      Object.values(byBillNo).filter(g => g.length > 1).forEach(g => {
+        allGroups.push({ tab: t, reason: 'Same Bill No', rows: g });
+      });
+
+      // Same Vendor + Amount + Date — lower confidence, could be a genuine coincidence (e.g. two fuel fill-ups).
+      const byVAD = {};
+      rows.forEach(r => {
+        const vendor = String(r.vendor||'').trim().toLowerCase();
+        const amt = (parseFloat(r.amount)||0).toFixed(3);
+        const key = vendor + '|' + amt + '|' + r.date;
+        if (!vendor) return;
+        (byVAD[key] = byVAD[key] || []).push(r);
+      });
+      Object.values(byVAD).filter(g => g.length > 1).forEach(g => {
+        // Don't show the same rows twice if they already matched on Bill No above
+        const alreadyFlagged = allGroups.some(grp => grp.tab===t && grp.rows.length===g.length && grp.rows.every(r=>g.includes(r)));
+        if (!alreadyFlagged) allGroups.push({ tab: t, reason: 'Same Vendor + Amount + Date', rows: g });
+      });
+    }
+    renderDupFinder(allGroups, selectedTabs);
+    setStatus('dupFinderStatus','','');
+  } catch(err){ setStatus('dupFinderStatus','Could not reach your sheet — check connection','err'); }
+  finally { $('showDupFinderBtn').disabled = false; }
+};
+
+function renderDupFinder(groups, selectedTabs){
+  lastDupGroups = groups;
+  const genDate = new Date().toLocaleString();
+  const totalFlaggedRows = groups.reduce((s,g)=>s+g.rows.length,0);
+
+  $('dupFinderContent').innerHTML = `
+    <div class="report-header">
+      <img src="logo.png" alt="MYM Constructions">
+      <div>
+        <div class="report-company-name">MYM CONSTRUCTIONS</div>
+        <div class="report-company-full">Mubashar Younis Malik Constructions Company</div>
+      </div>
+    </div>
+    <div class="report-title">Duplicate Bill Finder</div>
+    <div class="report-meta">Generated ${genDate} · ${selectedTabs.length} month${selectedTabs.length===1?'':'s'} checked · ${groups.length} group${groups.length===1?'':'s'} flagged (${totalFlaggedRows} bills)</div>
+    ${groups.length === 0 ? '<p class="help-text" style="margin-top:16px;">No duplicates found in the selected months. 🎉</p>' : groups.map((g,gi) => `
+      <div class="report-title" style="font-size:13px;margin-top:20px;">${gi+1}. ${escapeHtml(g.reason)} — ${escapeHtml(tabDisplayName(g.tab))}</div>
+      <div class="report-table-wrap">
+      <table class="report-table" style="min-width:500px;">
+        <thead><tr><th>S/N</th><th>Date</th><th>Bill No</th><th>Vendor</th><th class="num">Amount</th><th class="num">Total</th></tr></thead>
+        <tbody>
+          ${g.rows.map(r => `<tr>
+            <td>${r.sn}</td>
+            <td>${escapeHtml(r.date)}</td>
+            <td>${escapeHtml(r.billNo||'')}</td>
+            <td>${escapeHtml(r.vendor||'')}</td>
+            <td class="num">${(parseFloat(r.amount)||0).toFixed(3)}</td>
+            <td class="num">${(parseFloat(r.total)||0).toFixed(3)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>
+    `).join('')}
+  `;
+  $('dupFinderWrap').style.display = 'block';
+}
+
+$('printDupFinderBtn').onclick = () => openPrintWindow($('dupFinderContent').innerHTML);
+
+$('exportDupFinderCsvBtn').onclick = () => {
+  if (!lastDupGroups){ setStatus('dupFinderStatus','Run a check first','err'); return; }
+  const out = [['Group','Reason','Tab','S/N','Date','Bill No','Vendor','Amount','Total']];
+  lastDupGroups.forEach((g,gi) => g.rows.forEach(r => out.push([
+    gi+1, g.reason, tabDisplayName(g.tab), r.sn, r.date, r.billNo||'', r.vendor||'', (parseFloat(r.amount)||0).toFixed(3), (parseFloat(r.total)||0).toFixed(3)
+  ])));
+  const stamp = new Date().toISOString().slice(0,10);
+  downloadCsv(`MYM-duplicates-${stamp}.csv`, out);
+};
+
 /* ---------------- REPORT MODE TOGGLE (3-way) ---------------- */
 function showReportSection(which){
-  const btns = { monthly:$('reportModeMonthlyBtn'), vat:$('reportModeVatBtn'), petty:$('reportModePettyBtn'), top:$('reportModeTopBtn'), cash:$('reportModeCashBtn') };
-  const sections = { monthly:$('monthlyReportSection'), vat:$('vatComparisonSection'), petty:$('pettyLedgerSection'), top:$('topVendorsSection'), cash:$('cashFlowSection') };
+  const btns = { monthly:$('reportModeMonthlyBtn'), vat:$('reportModeVatBtn'), petty:$('reportModePettyBtn'), top:$('reportModeTopBtn'), cash:$('reportModeCashBtn'), dup:$('reportModeDupBtn') };
+  const sections = { monthly:$('monthlyReportSection'), vat:$('vatComparisonSection'), petty:$('pettyLedgerSection'), top:$('topVendorsSection'), cash:$('cashFlowSection'), dup:$('dupFinderSection') };
   Object.keys(btns).forEach(k => btns[k].classList.toggle('active', k === which));
   Object.keys(sections).forEach(k => sections[k].style.display = k === which ? 'block' : 'none');
   if (which === 'petty'){ populatePettyLedgerMemberSelect(); loadCompanyFloat(); }
@@ -2186,6 +2343,7 @@ $('reportModeVatBtn').onclick = () => showReportSection('vat');
 $('reportModePettyBtn').onclick = () => showReportSection('petty');
 $('reportModeTopBtn').onclick = () => showReportSection('top');
 $('reportModeCashBtn').onclick = () => showReportSection('cash');
+$('reportModeDupBtn').onclick = () => showReportSection('dup');
 
 /* ---------------- VAT COMPARISON ---------------- */
 
