@@ -204,6 +204,17 @@
       <button class="icon-btn" id="settingsShortcut">⚙</button>
     </header>
 
+    <div class="totals-card" id="quarterDashboard" style="margin-bottom:16px;">
+      <div class="tab-row"><label style="margin:0;" id="quarterLabel">This Quarter</label><button class="link-btn" id="refreshQuarterBtn">Refresh</button></div>
+      <div class="totals-grid">
+        <div class="totals-cell"><div class="totals-label">Sales</div><div class="totals-value mono" id="quarterSales">—</div></div>
+        <div class="totals-cell"><div class="totals-label">Purchases</div><div class="totals-value mono" id="quarterPurchases">—</div></div>
+        <div class="totals-cell"><div class="totals-label">Output VAT</div><div class="totals-value mono" id="quarterOutputVat">—</div></div>
+        <div class="totals-cell"><div class="totals-label">Input VAT</div><div class="totals-value mono" id="quarterInputVat">—</div></div>
+        <div class="totals-cell" style="grid-column:1/-1;"><div class="totals-label">Net VAT</div><div class="totals-value mono accent" id="quarterNetVat">—</div></div>
+      </div>
+    </div>
+
     <div class="mode-toggle">
       <button class="mode-btn active" id="modePurchasesBtn" data-mode="purchases">🛒 Purchases</button>
       <button class="mode-btn" id="modeSalesBtn" data-mode="sales">💰 Sales</button>
@@ -2769,6 +2780,47 @@ function pruneLocalEntries(){
   }
 }
 
+/* ---------------- QUARTERLY DASHBOARD ---------------- */
+function getCurrentQuarterInfo(){
+  const now = new Date();
+  const year = now.getFullYear();
+  const qIndex = Math.floor(now.getMonth()/3); // 0,1,2,3
+  const qStartMonth = qIndex * 3;
+  const months = [MONTH_NAMES[qStartMonth], MONTH_NAMES[qStartMonth+1], MONTH_NAMES[qStartMonth+2]]
+    .map(m => m.toUpperCase() + '-' + year);
+  return { label: 'Q' + (qIndex+1) + ' ' + year, months };
+}
+
+async function loadQuarterDashboard(){
+  const { label, months } = getCurrentQuarterInfo();
+  $('quarterLabel').textContent = label + ' (This Quarter)';
+  if (!scriptUrl || !navigator.onLine) return;
+
+  const purchaseTabs = months.filter(m => tabs.includes(m));
+  const salesTabs = months.filter(m => tabs.includes(SALES_PREFIX + m)).map(m => SALES_PREFIX + m);
+  if (!purchaseTabs.length && !salesTabs.length) return; // nothing created yet for this quarter
+
+  try {
+    let salesAmt = 0, salesVat = 0, purchAmt = 0, purchVat = 0;
+    for (const t of purchaseTabs){
+      const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'getReportData', tab:t }) }, 15000);
+      const data = await res.json();
+      if (data.ok) (data.rows||[]).forEach(r => { purchAmt += parseFloat(r.amount)||0; purchVat += parseFloat(r.vat)||0; });
+    }
+    for (const t of salesTabs){
+      const res = await fetchWithTimeout(scriptUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({ action:'getReportData', tab:t }) }, 15000);
+      const data = await res.json();
+      if (data.ok) (data.rows||[]).forEach(r => { salesAmt += parseFloat(r.amount)||0; salesVat += parseFloat(r.vat)||0; });
+    }
+    $('quarterSales').textContent = (salesAmt+salesVat).toFixed(3);
+    $('quarterPurchases').textContent = (purchAmt+purchVat).toFixed(3);
+    $('quarterOutputVat').textContent = salesVat.toFixed(3);
+    $('quarterInputVat').textContent = purchVat.toFixed(3);
+    $('quarterNetVat').textContent = (salesVat-purchVat).toFixed(3);
+  } catch(err){ /* leave dashes on screen — non-critical summary, don't block the rest of Home */ }
+}
+$('refreshQuarterBtn').onclick = (e) => { e.preventDefault(); loadQuarterDashboard(); };
+
 async function refreshHome(){
   await fetchTabFromSheet(activeTab);
   render();
@@ -2819,9 +2871,10 @@ updateModeUI();
 populateVendorDatalist();
 populateIssuerDatalist();
 fetchPettyMembersFromServer();
-if (scriptUrl && tabs.length){ render(); refreshHome(); }
+$('quarterLabel').textContent = getCurrentQuarterInfo().label + ' (This Quarter)'; // show the label immediately, even before data loads
+if (scriptUrl && tabs.length){ render(); refreshHome(); loadQuarterDashboard(); }
 else if (scriptUrl){
-  fetchWithTimeout(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); refreshHome(); } }).catch(()=>render());
+  fetchWithTimeout(scriptUrl+'?action=tabs').then(r=>r.json()).then(d=>{ if(d.ok){ tabs=d.tabs; saveTabs(); render(); refreshHome(); loadQuarterDashboard(); } }).catch(()=>render());
 } else { render(); switchView('settings'); }
 setInterval(() => { syncPending(false); refreshHome(); refreshTabsList(); }, 30000);
 </script>
