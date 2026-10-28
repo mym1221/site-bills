@@ -261,7 +261,7 @@
     <div class="mode-toggle">
       <button class="mode-btn active" id="modePurchasesBtn" data-mode="purchases">🛒 Purchases</button>
       <button class="mode-btn" id="modeSalesBtn" data-mode="sales">💰 Sales</button>
-      <button class="mode-btn" id="modePettyBtn" data-mode="petty">💵 Petty Cash</button>
+      <button class="mode-btn" id="modePettyBtn" data-mode="petty" style="display:none;">💵 Petty Cash</button>
     </div>
 
     <section class="totals-card">
@@ -326,7 +326,7 @@
     <div class="mode-toggle" style="margin-bottom:16px;">
       <button class="mode-btn active" id="reportModeMonthlyBtn">Monthly Report</button>
       <button class="mode-btn" id="reportModeVatBtn">VAT Comparison</button>
-      <button class="mode-btn" id="reportModePettyBtn">Petty Cash</button>
+      <button class="mode-btn" id="reportModePettyBtn" style="display:none;">Petty Cash</button>
       <button class="mode-btn" id="reportModeTopBtn">Top Vendors</button>
       <button class="mode-btn" id="reportModeCashBtn">Cash Flow</button>
       <button class="mode-btn" id="reportModeDupBtn">Duplicates</button>
@@ -498,7 +498,7 @@
       <button class="btn btn-ghost" style="width:100%;" id="syncNowBtn">Sync Pending Bills</button>
     </div>
 
-    <div class="settings-block">
+    <div class="settings-block" style="display:none;">
       <h3>Petty Cash Members</h3>
       <p class="help-text">The people who receive petty cash. Add as many as you need. Used in the Petty Cash mode and the "Paid Via" tag on Purchases bills.</p>
       <div id="pettyMembersList"></div>
@@ -533,6 +533,16 @@
       </div>
       <button class="btn btn-ghost" style="width:100%;" id="createTabBtn">Create Tab</button>
       <div class="status-msg" id="tabStatus"></div>
+    </div>
+
+    <div class="settings-block">
+      <h3>Delete a tab</h3>
+      <p class="help-text">For a tab created by mistake or with a wrong spelling. Shows how many entries it holds and asks you to type its name before deleting. Photos already saved in Google Drive are not removed.</p>
+      <div class="field">
+        <select id="deleteTabSelect"></select>
+      </div>
+      <button class="btn btn-ghost" style="width:100%;color:#ff6b5a;" id="deleteTabBtn">Delete Tab…</button>
+      <div class="status-msg" id="deleteTabStatus"></div>
     </div>
 
     <div class="settings-block">
@@ -699,7 +709,8 @@ const SALES_PREFIX = 'SALES-';
 let scriptUrl = localStorage.getItem(LS_KEYS.url) || '';
 let tabs = JSON.parse(localStorage.getItem(LS_KEYS.tabs) || '[]');
 let entries = JSON.parse(localStorage.getItem(LS_KEYS.entries) || '[]');
-let mode = localStorage.getItem(LS_KEYS.mode) || 'purchases'; // 'purchases' | 'sales'
+let mode = localStorage.getItem(LS_KEYS.mode) || 'purchases';
+if (mode === 'petty') mode = 'purchases'; // Petty Cash hidden (not used) // 'purchases' | 'sales'
 let activeTab = localStorage.getItem(LS_KEYS.activeTab) || '';
 let activeTabSales = localStorage.getItem(LS_KEYS.activeTabSales) || '';
 let activeTabPetty = localStorage.getItem(LS_KEYS.activeTabPetty) || '';
@@ -1037,6 +1048,10 @@ function populateTabSelects(){
     sel.innerHTML = '';
     modeTabs.forEach(t => sel.appendChild(new Option(tabDisplayName(t), t)));
   });
+  if ($('deleteTabSelect')){
+    $('deleteTabSelect').innerHTML = '<option value="">— select tab —</option>' +
+      modeTabs.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(tabDisplayName(t))}</option>`).join('');
+  }
   $('historyTabFilter').innerHTML = '<option value="__all">All tabs</option>' +
     modeTabs.map(t => `<option value="${t}">${tabDisplayName(t)}</option>`).join('');
   if (modeTabs.length){
@@ -1388,6 +1403,36 @@ $('createTabBtn').onclick = async () => {
       $('newTabName').value = '';
     } else setStatus('tabStatus', data.error || 'Failed to create tab','err');
   } catch(err){ setStatus('tabStatus','Could not reach sheet','err'); }
+};
+
+$('deleteTabBtn').onclick = async () => {
+  const name = $('deleteTabSelect').value;
+  if (!name){ setStatus('deleteTabStatus','Select a tab first','err'); return; }
+  if (!scriptUrl){ setStatus('deleteTabStatus','Connect to your sheet first','err'); return; }
+  $('deleteTabBtn').disabled = true;
+  setStatus('deleteTabStatus','Checking tab…','');
+  try {
+    const post = async (payload) => (await fetchWithTimeout(scriptUrl, {
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload)
+    })).json();
+    const info = await post({ action:'getTabInfo', tabName:name });
+    if (!info.ok){ setStatus('deleteTabStatus', info.error || 'Could not check tab','err'); return; }
+    const warn = info.rows > 0
+      ? `⚠ "${name}" contains ${info.rows} entr${info.rows===1?'y':'ies'}. Deleting removes them from the Sheet.`
+      : `"${name}" is empty.`;
+    const typed = prompt(`${warn}\n\nThis cannot be undone from the app.\nType the tab name exactly to confirm deletion:\n\n${name}`);
+    if (typed === null){ setStatus('deleteTabStatus','Cancelled',''); return; }
+    if (typed.trim() !== name){ setStatus('deleteTabStatus','Name did not match — nothing deleted','err'); return; }
+    setStatus('deleteTabStatus','Deleting…','');
+    const data = await post({ action:'deleteTab', tabName:name, confirmName:name });
+    if (data.ok){
+      tabs = data.tabs; saveTabs();
+      if (activeTab === name) activeTab = '';
+      populateTabSelects(); render(); refreshHome();
+      setStatus('deleteTabStatus','Tab "'+name+'" deleted','ok');
+    } else setStatus('deleteTabStatus', data.error || 'Failed to delete tab','err');
+  } catch(err){ setStatus('deleteTabStatus','Could not reach sheet','err'); }
+  finally { $('deleteTabBtn').disabled = false; }
 };
 
 /* ---------------- ADD BILL ---------------- */
