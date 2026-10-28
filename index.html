@@ -959,10 +959,16 @@ $('settingsShortcut').onclick = () => switchView('settings');
 const PETTY_CASH_PREFIX = 'PETTYCASH-';
 function isSalesTab(t){ return String(t).indexOf(SALES_PREFIX) === 0; }
 function isPettyTab(t){ return String(t).indexOf(PETTY_CASH_PREFIX) === 0; }
+function sortTabsByMonth(list){
+  const key = (t) => { const i = parseTabMonthYear(t); return i ? i.year*100 + i.month : 999999; };
+  return list.map((t,idx) => ({t, idx, k:key(t)})).sort((a,b) => a.k - b.k || a.idx - b.idx).map(x => x.t);
+}
 function getModeTabs(){
-  if (mode === 'sales') return tabs.filter(isSalesTab);
-  if (mode === 'petty') return tabs.filter(isPettyTab);
-  return tabs.filter(t => !isSalesTab(t) && !isPettyTab(t));
+  let list;
+  if (mode === 'sales') list = tabs.filter(isSalesTab);
+  else if (mode === 'petty') list = tabs.filter(isPettyTab);
+  else list = tabs.filter(t => !isSalesTab(t) && !isPettyTab(t));
+  return sortTabsByMonth(list); // Jan → Dec, oldest first; unrecognised names go last
 }
 function tabDisplayName(t){
   if (isSalesTab(t)) return t.slice(SALES_PREFIX.length);
@@ -1055,7 +1061,7 @@ function populateTabSelects(){
   $('historyTabFilter').innerHTML = '<option value="__all">All tabs</option>' +
     modeTabs.map(t => `<option value="${t}">${tabDisplayName(t)}</option>`).join('');
   if (modeTabs.length){
-    if (!activeTab || !modeTabs.includes(activeTab)) activeTab = modeTabs[0];
+    if (!activeTab || !modeTabs.includes(activeTab)) activeTab = modeTabs[modeTabs.length-1]; // newest month
     $('activeTab').value = activeTab;
     $('fTab').value = activeTab;
   } else {
@@ -2884,9 +2890,15 @@ async function loadQuarterDashboard(){
   $('quarterLabel').textContent = label + ' (This Quarter)';
   if (!scriptUrl || !navigator.onLine) return;
 
-  const purchaseTabs = months.filter(m => tabs.includes(m));
-  const salesTabs = months.filter(m => tabs.includes(SALES_PREFIX + m)).map(m => SALES_PREFIX + m);
-  if (!purchaseTabs.length && !salesTabs.length) return; // nothing created yet for this quarter
+  try { if (typeof refreshTabsList === 'function') await refreshTabsList(); } catch(e){}
+  const qNow = new Date(), qYear = qNow.getFullYear(), qFirst = Math.floor(qNow.getMonth()/3)*3 + 1;
+  const inQuarter = (t) => { const i = parseTabMonthYear(t); return i && i.year === qYear && i.month >= qFirst && i.month < qFirst + 3; };
+  const purchaseTabs = tabs.filter(t => !isSalesTab(t) && !isPettyTab(t) && inQuarter(t));
+  const salesTabs = tabs.filter(t => isSalesTab(t) && inQuarter(t));
+  if (!purchaseTabs.length && !salesTabs.length){
+    ['quarterSales','quarterPurchases','quarterOutputVat','quarterInputVat','quarterNetVat'].forEach(id => $(id).textContent = '0.000');
+    return;
+  }
 
   try {
     let salesAmt = 0, salesVat = 0, purchAmt = 0, purchVat = 0;
